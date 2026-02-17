@@ -33,7 +33,7 @@ db.sqlite3-journal
 /media/
 /staticfiles/
 
-# Environment variables (САМОЕ ВАЖНОЕ!)
+# Environment variables
 .env
 
 # IDEs
