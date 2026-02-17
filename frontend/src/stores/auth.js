@@ -52,7 +52,56 @@ export const useAuthStore = defineStore('auth', {
     isAuthenticated: (state) => !!state.accessToken,
   },
 
-  actions: {},
+  actions: {
+    async login(username, password) {
+      const { data } = await api.post('/api/auth/login/', { username, password })
+      this.setTokens(data)
+      this.user = data.user
+      return data
+    },
+
+    async register(userData) {
+      const { data } = await api.post('/api/auth/register/', userData)
+      this.setTokens(data)
+      this.user = data.user
+      return data
+    },
+
+    async logout() {
+      try {
+        await api.post('/api/auth/logout/', {
+          refresh: this.refreshToken,
+        })
+      } catch (e) {
+        console.error('Logout error:', e)
+      }
+      this.clearTokens()
+    },
+
+    async fetchUser() {
+      try {
+        const { data } = await api.get('/api/auth/user/')
+        this.user = data
+      } catch {
+        this.clearTokens()
+      }
+    },
+
+    setTokens(data) {
+      this.accessToken = data.access
+      this.refreshToken = data.refresh
+      localStorage.setItem('access_token', data.access)
+      localStorage.setItem('refresh_token', data.refresh)
+    },
+
+    clearTokens() {
+      this.accessToken = null
+      this.refreshToken = null
+      this.user = null
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+    },
+  },
 })
 
 export { api }
