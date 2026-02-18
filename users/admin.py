@@ -11,21 +11,36 @@ class RoleAdmin(admin.ModelAdmin):
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ['username', 'email', 'role', 'is_active', 'created_at']
-    list_filter = ['role', 'is_active', 'is_staff']
-    readonly_fields = ['created_at', 'updated_at']
+    list_display = ['username', 'email', 'first_name', 'last_name', 'role', 'is_active', 'needs_password_change',
+                    'created_at']
+    list_filter = ['is_active', 'needs_password_change', 'role', 'is_staff']
+    readonly_fields = ['created_at', 'updated_at', 'last_login', 'date_joined']
 
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
-        ('Персональная информация', {'fields': ('first_name', 'last_name', 'email')}),
-        ('Права доступа', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
-        ('Роль и Telegram', {'fields': ('role', 'telegram_id')}),
+        ('Персональная информация', {
+            'fields': ('first_name', 'last_name', 'email', 'telegram_id')
+        }),
+        ('Права доступа', {
+            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')
+        }),
+        ('Роль', {'fields': ('role', 'needs_password_change')}),
         ('Даты', {'fields': ('last_login', 'date_joined', 'created_at', 'updated_at'), 'classes': ('collapse',)}),
     )
 
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('username', 'email', 'password1', 'password2', 'role', 'telegram_id'),
+            'fields': (
+                'username',
+                'email',
+                'password1',
+                'password2',
+                'first_name',
+                'last_name',
+                'role',
+                'telegram_id',
+                'is_active'
+            ),
         }),
     )
