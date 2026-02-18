@@ -36,10 +36,6 @@ class Role(models.Model):
 
 
 class CustomUserManager(BaseUserManager):
-    """
-    Кастомный менеджер для создания пользователей и суперпользователей
-    """
-
     def create_user(self, username, email=None, password=None, **extra_fields):
         if not username:
             raise ValueError('Username должен быть указан')
@@ -51,7 +47,6 @@ class CustomUserManager(BaseUserManager):
         return user
 
     def create_superuser(self, username, email=None, password=None, **extra_fields):
-        # Суперпользователь всегда получает роль Администратора
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('is_active', True)
@@ -61,7 +56,6 @@ class CustomUserManager(BaseUserManager):
             role = Role.objects.get(name=Role.ADMIN)
             extra_fields.setdefault('role', role)
         except Role.DoesNotExist:
-            # Если ролей еще нет (первый запуск), создаем их
             role, _ = Role.objects.get_or_create(
                 name=Role.ADMIN,
                 defaults={'description': 'Полный доступ к системе'}
@@ -104,6 +98,11 @@ class User(AbstractUser):
         auto_now=True,
         verbose_name='Дата обновления',
         db_column='updated_at'
+    )
+
+    needs_password_change = models.BooleanField(
+        default=True,
+        verbose_name='Требуется смена пароля'
     )
 
     class Meta:
