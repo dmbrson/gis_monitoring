@@ -39,3 +39,14 @@ class ChangePasswordSerializer(serializers.Serializer):
         if attrs['new_password'] != attrs['new_password_confirm']:
             raise serializers.ValidationError({"new_password_confirm": "Пароли не совпадают"})
         return attrs
+
+
+class ProfileUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['email', 'telegram_id', 'first_name', 'last_name']
+
+    def update(self, instance, validated_data):
+        if instance.needs_password_change:
+            pass
+        return super().update(instance, validated_data)
