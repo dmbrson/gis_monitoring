@@ -60,13 +60,6 @@ export const useAuthStore = defineStore('auth', {
       return data
     },
 
-    async register(userData) {
-      const { data } = await api.post('/api/auth/register/', userData)
-      this.setTokens(data)
-      this.user = data.user
-      return data
-    },
-
     async logout() {
       try {
         await api.post('/api/auth/logout/', {

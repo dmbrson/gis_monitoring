@@ -8,17 +8,12 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: () => import('@/components/HeaderView.vue'),
+      meta: { requiresAuth: true },
     },
     {
       path: '/login',
       name: 'login',
       component: () => import('@/components/LoginView.vue'),
-      meta: { guest: true },
-    },
-    {
-      path: '/register',
-      name: 'register',
-      component: () => import('@/components/RegisterView.vue'),
       meta: { guest: true },
     },
     {
@@ -36,7 +31,7 @@ router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next('/login')
   } else if (to.meta.guest && authStore.isAuthenticated) {
-    next('/')
+    next('/profile')
   } else {
     next()
   }
