@@ -15,7 +15,9 @@
       </button>
       <p v-if="error" class="error">{{ error }}</p>
     </form>
-    <p>Нет аккаунта? <router-link to="/register">Зарегистрироваться</router-link></p>
+    <p class="auth-links">
+      Нет учётной записи? Обратитесь к администратору
+    </p>
   </div>
 </template>
 
@@ -38,9 +40,17 @@ const handleLogin = async () => {
 
   try {
     await authStore.login(username.value, password.value)
-    router.push('/')
+    router.push('/profile')
   } catch (e) {
-    error.value = e.response?.data?.detail || 'Ошибка входа'
+    if (e.response?.data?.detail) {
+      error.value = e.response.data.detail
+    } else if (e.response?.data?.non_field_errors) {
+      error.value = e.response.data.non_field_errors.join(', ')
+    } else if (typeof e.response?.data === 'string') {
+      error.value = e.response.data
+    } else {
+      error.value = 'Ошибка входа. Проверьте логин и пароль'
+    }
   } finally {
     loading.value = false
   }
