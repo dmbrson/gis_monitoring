@@ -38,8 +38,6 @@
         </div>
       </div>
     </div>
-
-    <!-- NEW: Форма редактирования -->
     <div class="profile-section">
       <h3>✏️ Редактирование данных</h3>
       <form @submit.prevent="handleUpdateProfile">
@@ -98,11 +96,54 @@
         <p v-if="profileError" class="error-message">{{ profileError }}</p>
       </form>
     </div>
+    <div class="profile-section">
+      <h3>🔐 Смена пароля</h3>
+      <form @submit.prevent="handleChangePassword">
+        <div class="form-group">
+          <label>Текущий пароль *</label>
+          <input
+            v-model="passwordForm.old_password"
+            type="password"
+            required
+            :disabled="loadingPassword"
+            class="form-input"
+          />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Новый пароль *</label>
+            <input
+              v-model="passwordForm.new_password"
+              type="password"
+              required
+              :disabled="loadingPassword"
+              minlength="8"
+              class="form-input"
+            />
+          </div>
+          <div class="form-group">
+            <label>Подтверждение пароля *</label>
+            <input
+              v-model="passwordForm.new_password_confirm"
+              type="password"
+              required
+              :disabled="loadingPassword"
+              class="form-input"
+            />
+          </div>
+        </div>
+        <button type="submit" class="btn-primary" :disabled="loadingPassword">
+          {{ loadingPassword ? 'Сохранение...' : 'Изменить пароль' }}
+        </button>
+        <p v-if="passwordError" class="error-message">{{ passwordError }}</p>
+        <p v-if="passwordSuccess" class="success-message">{{ passwordSuccess }}</p>
+      </form>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { api } from '@/stores/auth'
@@ -112,11 +153,25 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const user = computed(() => authStore.user)
-const userRole = computed(() => user.value?.role_name || 'Без роли')
-
 const loadingProfile = ref(false)
+const loadingPassword = ref(false)
+const loading = ref(false)
+const passwordError = ref('')
+const passwordSuccess = ref('')
 const profileError = ref('')
 const profileSuccess = ref('')
+
+const needsVerification = computed(() => authStore.needsVerification)
+
+const userRole = computed(() => {
+  return user.value?.role_name || 'Без роли'
+})
+
+const passwordForm = ref({
+  old_password: '',
+  new_password: '',
+  new_password_confirm: ''
+})
 
 const profileForm = ref({
   first_name: '',
@@ -125,8 +180,22 @@ const profileForm = ref({
   telegram_id: ''
 })
 
+onMounted(async () => {
+  await authStore.fetchUser()
+  if (user.value) {
+    profileForm.value.first_name = user.value.first_name || ''
+    profileForm.value.last_name = user.value.last_name || ''
+    profileForm.value.email = user.value.email || ''
+    profileForm.value.telegram_id = user.value.telegram_id || ''
+  }
+})
+
 const handleUpdateProfile = async () => {
   console.log('Update profile:', profileForm.value)
+}
+
+const handleChangePassword = async () => {
+  console.log('Change password:', passwordForm.value)
 }
 
 const handleLogout = async () => {
@@ -140,6 +209,5 @@ const handleLogout = async () => {
   }
 }
 </script>
-
 <style scoped>
 </style>
