@@ -94,14 +94,25 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async logout() {
+      if (this.isLoggingOut) return
+      this.isLoggingOut = true
+
+      const tokenToBlacklist = this.refreshToken
+      const accessToken = this.accessToken
+
       try {
-        await api.post('/api/auth/logout/', {
-          refresh: this.refreshToken,
-        })
+        if (tokenToBlacklist) {
+          await api.post(
+            '/api/auth/logout/',
+            { refresh: tokenToBlacklist }
+          )
+        }
       } catch (e) {
-        console.error('Logout error:', e)
+        console.log('Logout API response:', e.response?.status || 'Network Error')
+      } finally {
+        this.clearTokens()
+        this.isLoggingOut = false
       }
-      this.clearTokens()
     },
 
     async fetchUser() {
