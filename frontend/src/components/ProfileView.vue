@@ -161,7 +161,17 @@ const passwordSuccess = ref('')
 const profileError = ref('')
 const profileSuccess = ref('')
 
-const needsVerification = computed(() => authStore.needsVerification)
+// const needsVerification = computed(() => authStore.needsVerification)
+//
+// const canCompleteVerification = computed(() => {
+//   if (!user.value || !needsVerification.value) return false
+//   return (
+//     profileForm.value.first_name?.trim() &&
+//     profileForm.value.last_name?.trim() &&
+//     profileForm.value.email?.trim() &&
+//     profileForm.value.telegram_id?.trim()
+//   )
+// })
 
 const userRole = computed(() => {
   return user.value?.role_name || 'Без роли'
@@ -180,6 +190,29 @@ const profileForm = ref({
   telegram_id: ''
 })
 
+const getErrorMessage = (error) => {
+  const data = error.response?.data
+  if (!data) return 'Ошибка сети или сервер недоступен'
+
+  if (data.error) return data.error
+  if (data.detail) return data.detail
+
+  if (typeof data === 'object' && !Array.isArray(data)) {
+    const messages = []
+    for (const [field, errors] of Object.entries(data)) {
+      if (Array.isArray(errors)) {
+        const prefix = field === 'non_field_errors' ? '' : `${field}: `
+        messages.push(...errors.map(err => `${prefix}${err}`))
+      } else if (typeof errors === 'string') {
+        messages.push(`${field}: ${errors}`)
+      }
+    }
+    if (messages.length) return messages.join('; ')
+  }
+
+  return data?.message || 'Произошла ошибка при обработке запроса'
+}
+
 onMounted(async () => {
   await authStore.fetchUser()
   if (user.value) {
@@ -190,12 +223,50 @@ onMounted(async () => {
   }
 })
 
-const handleUpdateProfile = async () => {
-  console.log('Update profile:', profileForm.value)
+const handleChangePassword = async () => {
+  loadingPassword.value = true
+  passwordError.value = ''
+  passwordSuccess.value = ''
+
+  if (passwordForm.value.new_password !== passwordForm.value.new_password_confirm) {
+    passwordError.value = 'Пароли не совпадают'
+    loadingPassword.value = false
+    return
+  }
+
+  if (passwordForm.value.new_password.length < 8) {
+    passwordError.value = 'Пароль должен содержать минимум 8 символов'
+    loadingPassword.value = false
+    return
+  }
+
+  try {
+    await api.post('/api/auth/change-password/', passwordForm.value)
+    passwordSuccess.value = 'Пароль успешно изменён!'
+    passwordForm.value = { old_password: '', new_password: '', new_password_confirm: '' }
+    await authStore.fetchUser()
+  } catch (e) {
+    passwordError.value = getErrorMessage(e)
+    passwordForm.value.old_password = ''
+  } finally {
+    loadingPassword.value = false
+  }
 }
 
-const handleChangePassword = async () => {
-  console.log('Change password:', passwordForm.value)
+const handleUpdateProfile = async () => {
+  loadingProfile.value = true
+  profileError.value = ''
+  profileSuccess.value = ''
+
+  try {
+    const { data } = await api.patch('/api/auth/user/update/', profileForm.value)
+    authStore.user = data
+    profileSuccess.value = 'Данные успешно обновлены!'
+  } catch (e) {
+    profileError.value = getErrorMessage(e)
+  } finally {
+    loadingProfile.value = false
+  }
 }
 
 const handleLogout = async () => {
