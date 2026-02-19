@@ -21,22 +21,53 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    const originalRequest = error.config
+
+    const isAuthEndpoint = originalRequest.url?.includes('/api/auth/token/refresh/') ||
+                           originalRequest.url?.includes('/api/auth/login/') ||
+                           originalRequest.url?.includes('/api/auth/logout/')
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       const refreshToken = localStorage.getItem('refresh_token')
+
       if (refreshToken) {
+        originalRequest._retry = true
+
         try {
           const { data } = await api.post('/api/auth/token/refresh/', {
             refresh: refreshToken,
           })
+
           localStorage.setItem('access_token', data.access)
-          error.config.headers.Authorization = `Bearer ${data.access}`
-          return api(error.config)
-        } catch {
-          localStorage.clear()
-          window.location.href = '/login'
+          localStorage.setItem('refresh_token', data.refresh)
+
+          if (window.authStore) {
+            window.authStore.accessToken = data.access
+            window.authStore.refreshToken = data.refresh
+          }
+
+          originalRequest.headers.Authorization = `Bearer ${data.access}`
+          return api(originalRequest)
+
+        } catch (refreshError) {
+          console.warn('Refresh failed, logging out:', refreshError.response?.data)
+
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('refresh_token')
+
+          if (window.authStore) {
+            window.authStore.clearTokens()
+          }
+
+          if (window.location.pathname !== '/login') {
+            window.location.href = '/login'
+          }
+
+          return Promise.reject(refreshError)
         }
       }
     }
+
     return Promise.reject(error)
   }
 )
@@ -46,10 +77,12 @@ export const useAuthStore = defineStore('auth', {
     user: null,
     accessToken: localStorage.getItem('access_token'),
     refreshToken: localStorage.getItem('refresh_token'),
+    isLoggingOut: false,
   }),
 
   getters: {
     isAuthenticated: (state) => !!state.accessToken,
+    needsVerification: (state) => state.user?.needs_password_change === true,
   },
 
   actions: {
@@ -96,5 +129,11 @@ export const useAuthStore = defineStore('auth', {
     },
   },
 })
+export let authStoreInstance = null
+
+export const initAuthStore = (store) => {
+  authStoreInstance = store
+  window.authStore = store
+}
 
 export { api }
