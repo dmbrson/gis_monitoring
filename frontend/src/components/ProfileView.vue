@@ -5,6 +5,18 @@
       <button @click="handleLogout" class="btn-danger">Выйти</button>
     </div>
 
+    <div v-if="needsVerification" class="verification-banner">
+      <div class="banner-icon">⚠️</div>
+      <div class="banner-content">
+        <h3>Требуется подтверждение данных</h3>
+        <p>Для доступа к системе необходимо:</p>
+        <ol>
+          <li>Проверить и обновить личные данные</li>
+          <li>Сменить временный пароль</li>
+        </ol>
+      </div>
+    </div>
+
     <div class="profile-section">
       <h3>📋 Личная информация</h3>
       <div class="info-grid">
@@ -22,23 +34,10 @@
             {{ user?.is_active ? 'Активен' : 'Неактивен' }}
           </span>
         </div>
-                <div class="info-item">
-          <label>Имя пользователя:</label>
-          <span>{{ user?.username }}</span>
-        </div>
-        <div class="info-item">
-          <label>Роль:</label>
-          <span class="role-badge">{{ userRole }}</span>
-        </div>
-        <div class="info-item">
-          <label>Статус:</label>
-          <span :class="['status-badge', user?.is_active ? 'active' : 'inactive']">
-            {{ user?.is_active ? 'Активен' : 'Неактивен' }}
-          </span>
-        </div>
       </div>
     </div>
-    <div class="profile-section">
+
+    <div class="profile-section" :class="{ 'required-section': needsVerification }">
       <h3>✏️ Редактирование данных</h3>
       <form @submit.prevent="handleUpdateProfile">
         <div class="form-row">
@@ -48,7 +47,7 @@
               v-model="profileForm.first_name"
               type="text"
               required
-              :disabled="loadingProfile"
+              :disabled="loading"
               placeholder="Ваше имя"
               class="form-input"
             />
@@ -59,7 +58,7 @@
               v-model="profileForm.last_name"
               type="text"
               required
-              :disabled="loadingProfile"
+              :disabled="loading"
               placeholder="Ваша фамилия"
               class="form-input"
             />
@@ -72,7 +71,7 @@
               v-model="profileForm.email"
               type="email"
               required
-              :disabled="loadingProfile"
+              :disabled="loading"
               placeholder="example@company.com"
               class="form-input"
             />
@@ -83,7 +82,7 @@
               v-model="profileForm.telegram_id"
               type="text"
               required
-              :disabled="loadingProfile"
+              :disabled="loading"
               placeholder="@username или числовой ID"
               class="form-input"
             />
@@ -96,7 +95,8 @@
         <p v-if="profileError" class="error-message">{{ profileError }}</p>
       </form>
     </div>
-    <div class="profile-section">
+
+    <div class="profile-section" :class="{ 'required-section': needsVerification }">
       <h3>🔐 Смена пароля</h3>
       <form @submit.prevent="handleChangePassword">
         <div class="form-group">
@@ -105,7 +105,7 @@
             v-model="passwordForm.old_password"
             type="password"
             required
-            :disabled="loadingPassword"
+            :disabled="loading"
             class="form-input"
           />
         </div>
@@ -116,7 +116,7 @@
               v-model="passwordForm.new_password"
               type="password"
               required
-              :disabled="loadingPassword"
+              :disabled="loading"
               minlength="8"
               class="form-input"
             />
@@ -127,7 +127,7 @@
               v-model="passwordForm.new_password_confirm"
               type="password"
               required
-              :disabled="loadingPassword"
+              :disabled="loading"
               class="form-input"
             />
           </div>
@@ -161,17 +161,7 @@ const passwordSuccess = ref('')
 const profileError = ref('')
 const profileSuccess = ref('')
 
-// const needsVerification = computed(() => authStore.needsVerification)
-//
-// const canCompleteVerification = computed(() => {
-//   if (!user.value || !needsVerification.value) return false
-//   return (
-//     profileForm.value.first_name?.trim() &&
-//     profileForm.value.last_name?.trim() &&
-//     profileForm.value.email?.trim() &&
-//     profileForm.value.telegram_id?.trim()
-//   )
-// })
+const needsVerification = computed(() => authStore.needsVerification)
 
 const userRole = computed(() => {
   return user.value?.role_name || 'Без роли'
@@ -261,6 +251,7 @@ const handleUpdateProfile = async () => {
   try {
     const { data } = await api.patch('/api/auth/user/update/', profileForm.value)
     authStore.user = data
+    await authStore.fetchUser()
     profileSuccess.value = 'Данные успешно обновлены!'
   } catch (e) {
     profileError.value = getErrorMessage(e)
@@ -279,6 +270,8 @@ const handleLogout = async () => {
     router.push('/login')
   }
 }
+
 </script>
 <style scoped>
+@import '@/assets/profile.css';
 </style>
