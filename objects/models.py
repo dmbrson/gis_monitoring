@@ -73,7 +73,7 @@ class Object(gis_models.Model):
     status = models.ForeignKey(
         Status,
         on_delete=models.PROTECT,
-        related_name='objects',
+        related_name='status_objects',
         verbose_name='Статус'
     )
     responsible = models.ForeignKey(
