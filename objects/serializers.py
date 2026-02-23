@@ -16,16 +16,16 @@ class ObjectSerializer(serializers.ModelSerializer):
     responsible = UserSerializer(read_only=True)
 
     status_id = serializers.PrimaryKeyRelatedField(
-        queryset=Status.objects.filter(is_active=True),
+        queryset=Status.objects.all(),
         source='status',
         write_only=True,
         required=True
     )
     responsible_id = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.filter(is_active=True),
+        queryset=User.objects.all(),
         source='responsible',
         write_only=True,
-        required=True
+        required=False
     )
 
     coordinates = serializers.SerializerMethodField()
@@ -61,12 +61,24 @@ class ObjectSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Широта должна быть в диапазоне от -90 до 90")
         return value
 
+    def validate(self, data):
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        if start_date and end_date and end_date < start_date:
+            raise serializers.ValidationError({
+                'end_date': 'Дата окончания не может быть раньше даты начала'
+            })
+        return data
+
     def create(self, validated_data):
         coords = validated_data.pop('coordinates_input', None)
         if coords:
             validated_data['coordinates'] = Point(coords[0], coords[1], srid=4326)
-        else:
-            validated_data['coordinates'] = Point(131.885, 43.115, srid=4326)
+
+        if not validated_data.get('code'):
+            last_object = Object.objects.all().order_by('-id').first()
+            next_id = (last_object.id if last_object else 0) + 1
+            validated_data['code'] = f'OBJ-{next_id:05d}'
 
         return super().create(validated_data)
 
@@ -90,21 +102,16 @@ class HistorySerializer(serializers.ModelSerializer):
 
 class CommentSerializer(serializers.ModelSerializer):
     author = UserSerializer(read_only=True)
-    author_id = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(),
-        source='author',
-        write_only=True,
-        required=False
-    )
 
     class Meta:
         model = Comment
-        fields = [
-            'id', 'object', 'author', 'author_id', 'text', 'created_at'
-        ]
-        read_only_fields = ['id', 'created_at']
+        fields = ['id', 'object', 'author', 'text', 'created_at']
+        read_only_fields = ['id', 'created_at', 'author']
 
     def create(self, validated_data):
-        if 'author' not in validated_data and self.context['request'].user:
-            validated_data['author'] = self.context['request'].user
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            validated_data['author'] = request.user
+        else:
+            raise serializers.ValidationError("Не удалось определить автора")
         return super().create(validated_data)
