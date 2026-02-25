@@ -31,6 +31,7 @@ INSTALLED_APPS = [
 
     # GeoDjango
     'django.contrib.gis',
+    'leaflet',
 
     # DRF
     'rest_framework',
@@ -61,7 +62,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS_ALLOW_ALL_ORIGINS = True
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -160,3 +161,12 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'users.User'
+
+LEAFLET_CONFIG = {
+    'DEFAULT_CENTER': (43.1056, 131.8735),
+    'DEFAULT_ZOOM': 10,
+    'MIN_ZOOM': 1,
+    'MAX_ZOOM': 18,
+    'SCALE': 'both',
+    'ATTRIBUTION_PREFIX': '© MapTiler © OpenStreetMap contributors',
+}

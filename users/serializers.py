@@ -6,6 +6,7 @@ User = get_user_model()
 
 
 class UserSerializer(serializers.ModelSerializer):
+    role = serializers.SerializerMethodField(read_only=True)
     role_name = serializers.CharField(source='role.get_name_display', read_only=True)
 
     class Meta:
@@ -13,9 +14,18 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'email', 'role', 'role_name',
             'telegram_id', 'is_active', 'needs_password_change',
-            'first_name', 'last_name'
+            'first_name', 'last_name', 'is_superuser', 'is_staff',
         ]
-        read_only_fields = ['id', 'is_active', 'role', 'needs_password_change']
+        read_only_fields = ['id', 'is_active', 'needs_password_change']
+
+    def get_role(self, obj):
+        if obj.role:
+            return {
+                'id': obj.role.id,
+                'name': obj.role.name,
+                'description': obj.role.description
+            }
+        return None
 
 
 class LoginSerializer(serializers.Serializer):
