@@ -71,6 +71,20 @@
         </button>
       </div>
 
+      <transition name="fade">
+        <div v-if="loading" class="map-overlay">
+          <div class="spinner"></div>
+          <p>Загрузка объектов...</p>
+        </div>
+      </transition>
+
+      <transition name="fade">
+        <div v-if="error" class="map-overlay error">
+          <p class="error-text">⚠️ {{ error }}</p>
+          <button @click="fetchData" class="btn-retry">Повторить</button>
+        </div>
+      </transition>
+
       <div class="objects-count" v-if="!loading && !error">
         📍 {{ objectsCount }} объектов
       </div>
@@ -94,7 +108,13 @@ import { escapeHtml } from '@/utils/sanitize'
 const router = useRouter()
 const authStore = useAuthStore()
 
+const MAP_STYLE = `https://api.maptiler.com/maps/019c7f1e-1822-7283-9a47-54edeb6ca98d/style.json?key=${import.meta.env.VITE_MAPTILER_KEY}`
+const VLADIVOSTOK_CENTER = [131.8853, 43.1155]
+const DEFAULT_ZOOM = 12
+
+const map = ref(null)
 const mapContainer = ref(null)
+const markers = ref([])
 const objects = ref([])
 const statuses = ref([])
 const loading = ref(true)
@@ -109,15 +129,6 @@ const filters = ref({
   end_date: '',
   search: ''
 })
-
-let searchTimeout = null
-
-const MAP_STYLE = `https://api.maptiler.com/maps/019c7f1e-1822-7283-9a47-54edeb6ca98d/style.json?key=${import.meta.env.VITE_MAPTILER_KEY}`
-const VLADIVOSTOK_CENTER = [131.8853, 43.1155]
-const DEFAULT_ZOOM = 12
-
-const map = ref(null)
-const markers = ref([])
 
 const isAdmin = computed(() => {
   return authStore.user?.role?.name === 'admin' || authStore.user?.is_superuser === true
@@ -165,15 +176,17 @@ const fetchObjects = async () => {
 const fetchStatuses = async () => {
   try {
     const response = await api.get('/api/statuses/')
+
     let data = []
     if (Array.isArray(response.data)) {
       data = response.data
     } else if (response.data?.results && Array.isArray(response.data.results)) {
       data = response.data.results
     }
+
     statuses.value = data
   } catch (err) {
-    console.warn('Статусы не загружены:', err)
+    console.warn('Статусы не загружены (возможно, endpoint не настроен):', err)
     statuses.value = []
   }
 }
@@ -185,36 +198,6 @@ const fetchData = async () => {
   loading.value = false
 }
 
-const onFilterChange = () => {
-  if (filters.value.search) {
-    clearTimeout(searchTimeout)
-    searchTimeout = setTimeout(() => {
-      fetchData()
-    }, 600)
-  } else {
-    fetchData()
-  }
-}
-
-const resetFilters = () => {
-  filters.value = {
-    status: '',
-    responsible: '',
-    region: '',
-    start_date: '',
-    end_date: '',
-    search: ''
-  }
-  fetchData()
-}
-
-onMounted(async () => {
-  await fetchData()
-})
-
-onUnmounted(() => {
-  if (abortController) abortController.abort()
-})
 const initMap = () => {
   if (map.value) return
   try {
@@ -245,6 +228,7 @@ const initMap = () => {
 const createMarkerElement = (color, isActive = true) => {
   const el = document.createElement('div')
   el.className = 'map-marker'
+
   el.style.cssText = `
     width: 28px;
     height: 28px;
@@ -253,6 +237,7 @@ const createMarkerElement = (color, isActive = true) => {
     border: 3px solid white;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     cursor: ${isActive ? 'pointer' : 'default'};
+    will-change: auto;
     position: relative;
     display: flex;
     align-items: center;
@@ -266,7 +251,10 @@ const createMarkerElement = (color, isActive = true) => {
 }
 
 const updateMarkers = () => {
-  if (!map.value || !map.value.loaded() || !Array.isArray(objects.value)) return
+  if (!map.value || !map.value.loaded() || !Array.isArray(objects.value)) {
+    console.warn('updateMarkers: карта не готова или данные не массив')
+    return
+  }
 
   markers.value.forEach(marker => marker.remove())
   markers.value = []
@@ -306,6 +294,31 @@ const updateMarkers = () => {
   })
 }
 
+let searchTimeout = null
+
+const onFilterChange = () => {
+  if (filters.value.search) {
+    clearTimeout(searchTimeout)
+    searchTimeout = setTimeout(() => {
+      fetchData()
+    }, 400)
+  } else {
+    fetchData()
+  }
+}
+
+const resetFilters = () => {
+  filters.value = {
+    status: '',
+    responsible: '',
+    region: '',
+    start_date: '',
+    end_date: '',
+    search: ''
+  }
+  fetchData()
+}
+
 onMounted(async () => {
   initMap()
   await fetchData()
@@ -330,6 +343,7 @@ onUnmounted(() => {
   background: #f8f9fa;
   position: relative;
 }
+
 .filters-panel {
   width: 340px;
   min-width: 280px;
@@ -343,6 +357,7 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 8px;
 }
+
 .filters-header {
   display: flex;
   justify-content: space-between;
@@ -351,12 +366,14 @@ onUnmounted(() => {
   margin-bottom: 8px;
   border-bottom: 1px solid #eee;
 }
+
 .filters-header h3 {
   margin: 0;
   font-size: 1.1rem;
   font-weight: 600;
   color: #2c3e50;
 }
+
 .btn-reset {
   background: #f1f3f5;
   border: none;
@@ -371,13 +388,16 @@ onUnmounted(() => {
   justify-content: center;
   transition: all 0.2s;
 }
+
 .btn-reset:hover {
   background: #e2e6ea;
   color: #333;
 }
+
 .filter-group {
   margin-bottom: 4px;
 }
+
 .filter-group label {
   display: block;
   margin-bottom: 6px;
@@ -385,6 +405,7 @@ onUnmounted(() => {
   color: #495057;
   font-size: 0.9rem;
 }
+
 .form-input,
 .form-select {
   width: 100%;
@@ -393,27 +414,40 @@ onUnmounted(() => {
   border-radius: 6px;
   font-size: 0.95rem;
   background: white;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
+
+.form-input:focus,
+.form-select:focus {
+  outline: none;
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+}
+
 .date-range {
   display: flex;
   gap: 8px;
   align-items: center;
 }
+
 .date-separator {
   color: #adb5bd;
   font-weight: 300;
 }
+
 .legend {
   margin-top: 20px;
   padding-top: 16px;
   border-top: 1px solid #eee;
 }
+
 .legend h4 {
   margin: 0 0 12px 0;
   font-size: 1rem;
   font-weight: 600;
   color: #2c3e50;
 }
+
 .legend-item {
   display: flex;
   align-items: center;
@@ -422,6 +456,7 @@ onUnmounted(() => {
   font-size: 0.9rem;
   color: #555;
 }
+
 .legend-color {
   width: 18px;
   height: 18px;
@@ -430,11 +465,75 @@ onUnmounted(() => {
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
   flex-shrink: 0;
 }
+
+.legend-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .map-container {
   flex: 1;
   position: relative;
   background: #e9ecef;
 }
+
+.map-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255,255,255,0.95);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  gap: 16px;
+}
+
+.map-overlay.error {
+  background: rgba(255, 248, 248, 0.98);
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e9ecef;
+  border-top-color: #0d6efd;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error-text {
+  color: #dc3545;
+  font-weight: 500;
+  text-align: center;
+  padding: 0 20px;
+  margin: 0;
+}
+
+.btn-retry {
+  background: #0d6efd;
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.btn-retry:hover {
+  background: #0b5ed7;
+}
+
 .objects-count {
   position: absolute;
   top: 16px;
@@ -460,13 +559,48 @@ onUnmounted(() => {
   text-align: center;
   z-index: 5;
 }
+
 .map-hint p {
   margin: 0 0 6px 0;
   font-weight: 500;
   color: #495057;
 }
+
 .map-hint small {
   color: #6c757d;
+}
+
+@media (max-width: 900px) {
+  .map-dashboard {
+    flex-direction: column;
+  }
+
+  .filters-panel {
+    width: 100%;
+    max-height: 45vh;
+    border-right: none;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  .map-container {
+    height: 55vh;
+  }
+}
+
+@media (max-width: 480px) {
+  .filters-panel {
+    padding: 12px 16px;
+  }
+
+  .date-range {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+
+  .date-separator {
+    display: none;
+  }
 }
 .create-object-btn {
   position: absolute;
@@ -474,6 +608,7 @@ onUnmounted(() => {
   left: 24px;
   z-index: 10;
 }
+
 .btn-primary {
   display: flex;
   align-items: center;
@@ -487,7 +622,15 @@ onUnmounted(() => {
   font-weight: 500;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+  transition: all 0.2s;
 }
+
+.btn-primary:hover {
+  background: #0b5ed7;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(13, 110, 253, 0.4);
+}
+
 .btn-icon {
   font-size: 1.2rem;
   font-weight: bold;
