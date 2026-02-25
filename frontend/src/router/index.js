@@ -7,7 +7,7 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: () => import('@/components/HeaderView.vue'),
+      component: () => import('@/components/MapDashboardView.vue'),
       meta: { requiresAuth: true },
     },
     {
