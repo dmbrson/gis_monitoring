@@ -86,7 +86,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, api } from '@/stores/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -115,19 +115,55 @@ const createNewObject = () => {
   router.push({ name: 'object-create' })
 }
 
+let abortController = null
+
 const fetchObjects = async () => {
-  console.log('🔄 Загрузка объектов (заглушка)')
-  objects.value = []
-  objectsCount.value = 0
+  if (abortController) abortController.abort()
+  abortController = new AbortController()
+
+  try {
+    const params = {}
+    Object.entries(filters.value).forEach(([key, val]) => {
+      if (val) params[key] = val
+    })
+
+    const response = await api.get('/api/objects/', {
+      params,
+      signal: abortController.signal
+    })
+
+    let data = []
+    if (Array.isArray(response.data)) {
+      data = response.data
+    } else if (response.data?.results && Array.isArray(response.data.results)) {
+      data = response.data.results
+    } else if (response.data?.objects && Array.isArray(response.data.objects)) {
+      data = response.data.objects
+    }
+
+    objects.value = data
+    objectsCount.value = response.data.count ?? data.length
+  } catch (err) {
+    if (err.name === 'AbortError') return
+    console.error('Ошибка загрузки объектов:', err)
+    error.value = err.response?.data?.detail || 'Не удалось загрузить объекты'
+  }
 }
 
 const fetchStatuses = async () => {
-  console.log('🔄 Загрузка статусов (заглушка)')
-  statuses.value = [
-    { id: 1, name: 'Новый', color: '#17a2b8' },
-    { id: 2, name: 'В работе', color: '#ffc107' },
-    { id: 3, name: 'Завершён', color: '#28a745' }
-  ]
+  try {
+    const response = await api.get('/api/statuses/')
+    let data = []
+    if (Array.isArray(response.data)) {
+      data = response.data
+    } else if (response.data?.results && Array.isArray(response.data.results)) {
+      data = response.data.results
+    }
+    statuses.value = data
+  } catch (err) {
+    console.warn('Статусы не загружены:', err)
+    statuses.value = []
+  }
 }
 
 const fetchData = async () => {
@@ -138,7 +174,6 @@ const fetchData = async () => {
 }
 
 const onFilterChange = () => {
-  console.log('🔍 Фильтры изменены:', filters.value)
   fetchData()
 }
 
@@ -155,12 +190,11 @@ const resetFilters = () => {
 }
 
 onMounted(async () => {
-  console.log('Компонент смонтирован')
   await fetchData()
 })
 
 onUnmounted(() => {
-  console.log('Компонент размонтирован')
+  if (abortController) abortController.abort()
 })
 </script>
 
