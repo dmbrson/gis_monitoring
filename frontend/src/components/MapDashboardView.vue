@@ -107,6 +107,16 @@ const filters = ref({
   search: ''
 })
 
+import maplibregl from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
+
+const MAP_STYLE = `https://api.maptiler.com/maps/019c7f1e-1822-7283-9a47-54edeb6ca98d/style.json?key=${import.meta.env.VITE_MAPTILER_KEY}`
+const VLADIVOSTOK_CENTER = [131.8853, 43.1155]
+const DEFAULT_ZOOM = 12
+
+const map = ref(null)
+const markers = ref([])
+
 const isAdmin = computed(() => {
   return authStore.user?.role?.name === 'admin' || authStore.user?.is_superuser === true
 })
@@ -195,6 +205,87 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (abortController) abortController.abort()
+})
+const initMap = () => {
+  if (map.value) return
+  try {
+    map.value = new maplibregl.Map({
+      container: mapContainer.value,
+      style: MAP_STYLE,
+      center: VLADIVOSTOK_CENTER,
+      zoom: DEFAULT_ZOOM,
+      pitch: 0,
+      bearing: 0
+    })
+    map.value.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right')
+    map.value.addControl(new maplibregl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true },
+      trackUserLocation: true
+    }), 'top-right')
+
+    map.value.on('load', () => {
+      updateMarkers()
+    })
+  } catch (err) {
+    console.error('Ошибка инициализации карты:', err)
+    error.value = 'Не удалось загрузить карту'
+    loading.value = false
+  }
+}
+
+const createMarkerElement = (color, isActive = true) => {
+  const el = document.createElement('div')
+  el.className = 'map-marker'
+  el.style.cssText = `
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background-color: ${color};
+    border: 3px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    cursor: ${isActive ? 'pointer' : 'default'};
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `
+  if (isActive) {
+    el.onmouseenter = () => { el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)' }
+    el.onmouseleave = () => { el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)' }
+  }
+  return el
+}
+
+const updateMarkers = () => {
+  if (!map.value || !map.value.loaded() || !Array.isArray(objects.value)) return
+
+  markers.value.forEach(marker => marker.remove())
+  markers.value = []
+
+  objects.value.forEach(obj => {
+    if (!obj?.coordinates || !Array.isArray(obj.coordinates) || obj.coordinates.length !== 2) return
+    const [lng, lat] = obj.coordinates
+    const statusColor = /^#[0-9a-f]{6}$/i.test(obj.status?.color) ? obj.status.color : '#6c757d'
+    const el = createMarkerElement(statusColor)
+    const marker = new maplibregl.Marker({ element: el, anchor: 'center', offset: [0, -14] })
+      .setLngLat([lng, lat])
+      .addTo(map.value)
+    markers.value.push(marker)
+  })
+}
+
+onMounted(async () => {
+  initMap()
+  await fetchData()
+})
+
+onUnmounted(() => {
+  if (abortController) abortController.abort()
+  markers.value.forEach(marker => marker.remove())
+  if (map.value) {
+    map.value.remove()
+    map.value = null
+  }
 })
 </script>
 
