@@ -87,6 +87,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore, api } from '@/stores/auth'
+import maplibregl from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
+import { escapeHtml } from '@/utils/sanitize'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -107,8 +110,7 @@ const filters = ref({
   search: ''
 })
 
-import maplibregl from 'maplibre-gl'
-import 'maplibre-gl/dist/maplibre-gl.css'
+let searchTimeout = null
 
 const MAP_STYLE = `https://api.maptiler.com/maps/019c7f1e-1822-7283-9a47-54edeb6ca98d/style.json?key=${import.meta.env.VITE_MAPTILER_KEY}`
 const VLADIVOSTOK_CENTER = [131.8853, 43.1155]
@@ -184,7 +186,14 @@ const fetchData = async () => {
 }
 
 const onFilterChange = () => {
-  fetchData()
+  if (filters.value.search) {
+    clearTimeout(searchTimeout)
+    searchTimeout = setTimeout(() => {
+      fetchData()
+    }, 600)
+  } else {
+    fetchData()
+  }
 }
 
 const resetFilters = () => {
@@ -266,10 +275,33 @@ const updateMarkers = () => {
     if (!obj?.coordinates || !Array.isArray(obj.coordinates) || obj.coordinates.length !== 2) return
     const [lng, lat] = obj.coordinates
     const statusColor = /^#[0-9a-f]{6}$/i.test(obj.status?.color) ? obj.status.color : '#6c757d'
+    const statusName = escapeHtml(obj.status?.name || 'Без статуса')
+
     const el = createMarkerElement(statusColor)
+
+    const popup = new maplibregl.Popup({
+      offset: 20,
+      closeButton: true,
+      closeOnClick: false
+    }).setHTML(`
+      <div class="marker-popup">
+        <strong>${escapeHtml(obj.title)}</strong><br>
+        <small class="address">${escapeHtml(obj.address)}</small><br>
+        <div class="status-badge" style="color: ${statusColor}">● ${statusName}</div>
+        ${obj.code ? `<small class="code">${escapeHtml(obj.code)}</small>` : ''}
+      </div>
+    `)
+
     const marker = new maplibregl.Marker({ element: el, anchor: 'center', offset: [0, -14] })
       .setLngLat([lng, lat])
+      .setPopup(popup)
       .addTo(map.value)
+
+    el.addEventListener('click', (e) => {
+      e.stopPropagation()
+      console.log('Клик по объекту:', obj.id)
+    })
+
     markers.value.push(marker)
   })
 }
@@ -281,6 +313,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (abortController) abortController.abort()
+  clearTimeout(searchTimeout)
   markers.value.forEach(marker => marker.remove())
   if (map.value) {
     map.value.remove()
