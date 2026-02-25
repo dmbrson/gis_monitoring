@@ -25,13 +25,29 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
+
+  if (authStore.accessToken && !authStore.user && !to.meta.guest) {
+    try {
+      await authStore.fetchUser()
+    } catch (e) {
+      console.warn('Не удалось загрузить данные пользователя:', e)
+    }
+  }
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next('/login')
   } else if (to.meta.guest && authStore.isAuthenticated) {
     next('/profile')
+  } else if (to.meta.adminOnly) {
+    const userRole = authStore.user?.role?.name
+    const isSuperuser = authStore.user?.is_superuser
+    if (userRole !== 'admin' && !isSuperuser) {
+      next('/')
+    } else {
+      next()
+    }
   } else {
     next()
   }

@@ -3,48 +3,79 @@
     <aside class="filters-panel">
       <div class="filters-header">
         <h3>🔍 Фильтры</h3>
-        <button class="btn-reset" title="Сбросить все фильтры">⟲</button>
+        <button @click="resetFilters" class="btn-reset" title="Сбросить все фильтры">⟲</button>
       </div>
 
       <div class="filter-group">
         <label for="search">Поиск</label>
-        <input id="search" type="text" placeholder="Название, адрес, код..." class="form-input" />
+        <input
+          id="search"
+          v-model="filters.search"
+          @input="onFilterChange"
+          type="text"
+          placeholder="Название, адрес, код..."
+          class="form-input"
+        />
       </div>
 
       <div class="filter-group">
         <label for="status">Статус</label>
-        <select id="status" class="form-select">
+        <select
+          id="status"
+          v-model="filters.status"
+          @change="onFilterChange"
+          class="form-select"
+        >
           <option value="">Все статусы</option>
-          <option value="1">Новый</option>
-          <option value="2">В работе</option>
-          <option value="3">Завершён</option>
+          <option v-for="status in statuses" :key="status.id" :value="status.id">
+            {{ status.name }}
+          </option>
         </select>
       </div>
 
       <div class="filter-group">
         <label for="region">Регион / Район</label>
-        <input id="region" type="text" placeholder="Например: Первореченский" class="form-input" />
+        <input
+          id="region"
+          v-model="filters.region"
+          @input="onFilterChange"
+          type="text"
+          placeholder="Например: Первореченский"
+          class="form-input"
+        />
       </div>
 
       <div class="filter-group">
         <label>Период работ</label>
         <div class="date-range">
-          <input type="date" class="form-input" title="Дата начала" />
+          <input v-model="filters.start_date" @change="onFilterChange" type="date" class="form-input" title="Дата начала" />
           <span class="date-separator">—</span>
-          <input type="date" class="form-input" title="Дата окончания" />
+          <input v-model="filters.end_date" @change="onFilterChange" type="date" class="form-input" title="Дата окончания" />
+        </div>
+      </div>
+
+      <div class="legend" v-if="statuses.length">
+        <h4>📋 Статусы</h4>
+        <div v-for="status in statuses" :key="status.id" class="legend-item">
+          <span class="legend-color" :style="{ backgroundColor: status.color }" :title="status.description"></span>
+          <span class="legend-name">{{ status.name }}</span>
         </div>
       </div>
     </aside>
 
     <main class="map-container" ref="mapContainer">
-      <div class="create-object-btn">
-        <button class="btn-primary" title="Добавить новый объект">
+      <div class="create-object-btn" v-if="isAdmin">
+        <button @click="createNewObject" class="btn-primary" title="Добавить новый объект">
           <span class="btn-icon">+</span>
           <span class="btn-text">Объект</span>
         </button>
       </div>
-      <div class="objects-count">📍 0 объектов</div>
-      <div class="map-hint">
+
+      <div class="objects-count" v-if="!loading && !error">
+        📍 {{ objectsCount }} объектов
+      </div>
+
+      <div class="map-hint" v-if="!loading && objectsCount === 0">
         <p>Объекты не найдены</p>
         <small>Попробуйте изменить фильтры или добавить новый объект</small>
       </div>
@@ -53,7 +84,86 @@
 </template>
 
 <script setup>
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+
+const router = useRouter()
+const authStore = useAuthStore()
+
+const mapContainer = ref(null)
+const objects = ref([])
+const statuses = ref([])
+const loading = ref(true)
+const error = ref(null)
+const objectsCount = ref(0)
+
+const filters = ref({
+  status: '',
+  responsible: '',
+  region: '',
+  start_date: '',
+  end_date: '',
+  search: ''
+})
+
+const isAdmin = computed(() => {
+  return authStore.user?.role?.name === 'admin' || authStore.user?.is_superuser === true
+})
+
+const createNewObject = () => {
+  router.push({ name: 'object-create' })
+}
+
+const fetchObjects = async () => {
+  console.log('🔄 Загрузка объектов (заглушка)')
+  objects.value = []
+  objectsCount.value = 0
+}
+
+const fetchStatuses = async () => {
+  console.log('🔄 Загрузка статусов (заглушка)')
+  statuses.value = [
+    { id: 1, name: 'Новый', color: '#17a2b8' },
+    { id: 2, name: 'В работе', color: '#ffc107' },
+    { id: 3, name: 'Завершён', color: '#28a745' }
+  ]
+}
+
+const fetchData = async () => {
+  loading.value = true
+  error.value = null
+  await Promise.all([fetchObjects(), fetchStatuses()])
+  loading.value = false
+}
+
+const onFilterChange = () => {
+  console.log('🔍 Фильтры изменены:', filters.value)
+  fetchData()
+}
+
+const resetFilters = () => {
+  filters.value = {
+    status: '',
+    responsible: '',
+    region: '',
+    start_date: '',
+    end_date: '',
+    search: ''
+  }
+  fetchData()
+}
+
+onMounted(async () => {
+  console.log('Компонент смонтирован')
+  await fetchData()
+})
+
+onUnmounted(() => {
+  console.log('Компонент размонтирован')
+})
 </script>
+
 
 <style scoped>
 .map-dashboard {
