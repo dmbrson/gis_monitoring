@@ -1,9 +1,8 @@
 from rest_framework import serializers
 from django.contrib.gis.geos import Point
-from users.models import User
-from .models import Status, Object, History, Comment
-from users.serializers import UserSerializer
-
+from ..models import Status, Object, History, Comment
+from ...users.models import User
+from ...users.api.serializers import UserSerializer
 
 class StatusSerializer(serializers.ModelSerializer):
     class Meta:

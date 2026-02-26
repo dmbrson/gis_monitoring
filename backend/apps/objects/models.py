@@ -1,7 +1,7 @@
 from django.contrib.gis.db import models as gis_models
 from django.db import models
-from users.models import User
-
+from ..users.models import User
+from ..users.permissions import IsAdmin, IsManagerOrAdmin
 
 class Status(models.Model):
     name = models.CharField(
@@ -107,12 +107,6 @@ class Object(gis_models.Model):
 
     def __str__(self):
         return f"{self.code or f'OBJ-{self.id}'}: {self.title}"
-
-    def save(self, *args, **kwargs):
-        if not self.code and not self.pk:
-            super().save(*args, **kwargs)
-            self.code = f"OBJ-{self.id:04d}"
-        super().save(*args, **kwargs)
 
 
 class History(models.Model):

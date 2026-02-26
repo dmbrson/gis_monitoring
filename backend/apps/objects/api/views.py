@@ -3,9 +3,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
-from .models import Status, Object, History, Comment
+from ..models import Status, Object, History, Comment
 from .serializers import StatusSerializer, ObjectSerializer,HistorySerializer, CommentSerializer
-from users.permissions import IsAdmin, IsManagerOrAdmin
+from ...users.permissions import IsAdmin, IsManagerOrAdmin
 
 
 class IsCommentOwnerOrAdmin(permissions.BasePermission):

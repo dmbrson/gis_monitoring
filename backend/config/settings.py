@@ -3,8 +3,10 @@ from pathlib import Path
 from decouple import config
 from datetime import timedelta
 
-GDAL_LIBRARY_PATH = os.path.join(os.environ.get('OSGEO4W_ROOT', r'D:\Programming Apps\OSGeo4W'), 'bin', 'gdal312.dll')
-GEOS_LIBRARY_PATH = os.path.join(os.environ.get('OSGEO4W_ROOT', r'D:\Programming Apps\OSGeo4W'), 'bin', 'geos_c.dll')
+OSGEO4W_ROOT = config('OSGEO4W_ROOT', cast=str)
+
+GDAL_LIBRARY_PATH = os.path.join(OSGEO4W_ROOT, 'bin', 'gdal312.dll')
+GEOS_LIBRARY_PATH = os.path.join(OSGEO4W_ROOT, 'bin', 'geos_c.dll')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -40,9 +42,9 @@ INSTALLED_APPS = [
     'corsheaders',
 
     # Our apps
-    'users',
-    'objects',
-    'files',
+    'apps.users',
+    'apps.objects',
+    'apps.files',
 ]
 
 MIDDLEWARE = [
@@ -85,7 +87,7 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-ROOT_URLCONF = 'gis_monitoring.urls'
+ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
     {
@@ -103,7 +105,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'gis_monitoring.wsgi.application'
+WSGI_APPLICATION = 'config.wsgi.application'
 
 
 # Database

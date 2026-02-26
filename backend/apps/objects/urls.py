@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import StatusViewSet, ObjectViewSet, CommentViewSet
+from .api.views import StatusViewSet, ObjectViewSet, CommentViewSet
 
 router = DefaultRouter()
 router.register(r'statuses', StatusViewSet, basename='status')
