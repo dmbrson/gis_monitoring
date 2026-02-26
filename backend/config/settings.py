@@ -24,6 +24,8 @@ ALLOWED_HOSTS = []
 
 # Application definition
 INSTALLED_APPS = [
+    'apps.users',
+
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -42,9 +44,7 @@ INSTALLED_APPS = [
     'corsheaders',
 
     # Our apps
-    'apps.users',
     'apps.objects',
-    'apps.files',
 ]
 
 MIDDLEWARE = [
@@ -63,6 +63,12 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:3000",
 ]
+
+if DEBUG:
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r"^http://localhost:\d+$",
+        r"^http://127\.0\.0\.1:\d+$",
+    ]
 
 # CORS_ALLOW_ALL_ORIGINS = True
 
