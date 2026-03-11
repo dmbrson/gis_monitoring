@@ -12,19 +12,43 @@
           <h3>📋 Основная информация</h3>
           <div class="form-group">
             <label for="title">Название объекта *</label>
-            <input id="title" type="text" class="form-input" placeholder="Например: Ремонт ЛЭП-10кВ" />
+            <input
+              id="title"
+              v-model="form.title"
+              type="text"
+              class="form-input"
+              placeholder="Например: Ремонт ЛЭП-10кВ"
+            />
           </div>
           <div class="form-group">
             <label for="address">Адрес *</label>
-            <input id="address" type="text" class="form-input" placeholder="г. Владивосток, ул. Светланская, 1" />
+            <input
+              id="address"
+              v-model="form.address"
+              type="text"
+              class="form-input"
+              placeholder="г. Владивосток, ул. Светланская, 1"
+            />
           </div>
           <div class="form-group">
             <label for="region">Район / Регион</label>
-            <input id="region" type="text" class="form-input" placeholder="Первореченский, Фрунзенский..." />
+            <input
+              id="region"
+              v-model="form.region"
+              type="text"
+              class="form-input"
+              placeholder="Первореченский, Фрунзенский..."
+            />
           </div>
           <div class="form-group">
             <label for="description">Описание работ</label>
-            <textarea id="description" class="form-textarea" rows="4" placeholder="Детали выполняемых работ..."></textarea>
+            <textarea
+              id="description"
+              v-model="form.description"
+              class="form-textarea"
+              rows="4"
+              placeholder="Детали выполняемых работ..."
+            ></textarea>
           </div>
         </div>
 
@@ -32,14 +56,20 @@
           <h3>👥 Ответственные</h3>
           <div class="form-group">
             <label for="status_id">Статус *</label>
-            <select id="status_id" class="form-select">
+            <select id="status_id" v-model="form.status_id" class="form-select">
               <option value="" disabled>Выберите статус</option>
+              <option v-for="status in statuses" :key="status.id" :value="status.id">
+                {{ status.name }}
+              </option>
             </select>
           </div>
           <div class="form-group">
             <label for="responsible_id">Ответственный *</label>
-            <select id="responsible_id" class="form-select">
+            <select id="responsible_id" v-model="form.responsible_id" class="form-select">
               <option value="" disabled>Выберите сотрудника</option>
+              <option v-for="user in users" :key="user.id" :value="user.id">
+                {{ user.display_name || user.full_name || user.role }}
+              </option>
             </select>
           </div>
         </div>
@@ -49,11 +79,11 @@
           <div class="form-row">
             <div class="form-group">
               <label for="start_date">Дата начала *</label>
-              <input id="start_date" type="date" class="form-input" />
+              <input id="start_date" v-model="form.start_date" type="date" class="form-input" />
             </div>
             <div class="form-group">
               <label for="end_date">Дата окончания *</label>
-              <input id="end_date" type="date" class="form-input" />
+              <input id="end_date" v-model="form.end_date" type="date" class="form-input" />
             </div>
           </div>
         </div>
@@ -62,13 +92,18 @@
           <h3>📍 Координаты</h3>
           <div class="coords-info">
             <span class="coords-label">Выбрано:</span>
-            <span class="coords-placeholder">Кликните по карте для выбора</span>
+            <span v-if="form.coordinates" class="coords-value">
+              {{ form.coordinates[1].toFixed(5) }}, {{ form.coordinates[0].toFixed(5) }}
+            </span>
+            <span v-else class="coords-placeholder">Кликните по карте для выбора</span>
           </div>
         </div>
 
         <div class="form-actions">
           <button type="button" @click="cancel" class="btn-secondary">Отмена</button>
-          <button type="submit" class="btn-primary">Создать объект</button>
+          <button type="submit" class="btn-primary" :disabled="submitting">
+            {{ submitting ? 'Создание...' : 'Создать объект' }}
+          </button>
         </div>
       </form>
 
@@ -84,14 +119,60 @@
 </template>
 
 <script setup>
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+
+const router = useRouter()
+const authStore = useAuthStore()
+
+const map = ref(null)
+const mapContainer = ref(null)
+const markers = ref([])
+const loading = ref(false)
+const error = ref(null)
+const submitting = ref(false)
+
+const form = ref({
+  title: '',
+  address: '',
+  region: '',
+  coordinates: null,
+  description: '',
+  status_id: null,
+  responsible_id: null,
+  start_date: '',
+  end_date: ''
+})
+
+const statuses = ref([])
+const users = ref([])
+const errors = ref({})
+
+const isAdmin = computed(() => {
+  return authStore.user?.role?.name === 'admin' || authStore.user?.is_superuser === true
+})
+
 const cancel = () => {
   if (confirm('Отменить создание объекта?')) {
-    history.back()
+    router.back()
   }
 }
-const submitForm = () => {
-  console.log('Form submitted (stub)')
-}
+
+onMounted(() => {
+  if (!isAdmin.value) {
+    router.push('/')
+    return
+  }
+  console.log('ObjectCreate mounted')
+})
+
+onUnmounted(() => {
+  if (map.value) {
+    map.value.remove()
+    map.value = null
+  }
+})
 </script>
 
 <style scoped>
