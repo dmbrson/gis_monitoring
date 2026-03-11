@@ -354,9 +354,21 @@ const initMap = () => {
       trackUserLocation: true
     }), 'top-right')
 
-    map.value.on('click', (e) => {
+    map.value.on('click', async (e) => {
       const { lng, lat } = e.lngLat
       setMarker([lng, lat])
+      await reverseGeocode(lng, lat)
+    })
+
+    map.value.on('load', () => {
+      if (markers.value[0]) {
+        markers.value[0].setDraggable(true)
+        markers.value[0].on('dragend', async () => {
+          const lngLat = markers.value[0].getLngLat()
+          form.value.coordinates = [lngLat.lng, lngLat.lat]
+          await reverseGeocode(lngLat.lng, lngLat.lat)
+        })
+      }
     })
   } catch (err) {
     console.error('Ошибка инициализации карты:', err)
@@ -379,6 +391,31 @@ const setMarker = (coordinates) => {
     .addTo(map.value)
   markers.value.push(marker)
   form.value.coordinates = [lng, lat]
+}
+
+const reverseGeocode = async (lng, lat) => {
+  try {
+    const url = `https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${import.meta.env.VITE_MAPTILER_KEY}&language=ru`
+    const res = await fetch(url)
+    const data = await res.json()
+    if (data.features?.[0]) {
+      const feature = data.features[0]
+      const context = feature.context || []
+      const address = feature.place_name?.split(',')[0] || ''
+      const region = context.find(c => c.id?.includes('region'))?.text ||
+                     context.find(c => c.id?.includes('district'))?.text || ''
+      const addressInput = document.getElementById('address')
+      const regionInput = document.getElementById('region')
+      if (!addressInput?.matches(':focus')) {
+        form.value.address = address
+      }
+      if (!regionInput?.matches(':focus')) {
+        form.value.region = region
+      }
+    }
+  } catch (e) {
+    console.warn('Reverse geocoding failed:', e)
+  }
 }
 
 const cancel = () => {
