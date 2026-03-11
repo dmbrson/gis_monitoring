@@ -60,3 +60,22 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         if instance.needs_password_change:
             pass
         return super().update(instance, validated_data)
+
+class UserListSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    display_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'first_name', 'last_name', 'email', 'full_name', 'display_name', 'is_active']
+        read_only_fields = fields
+
+    def get_full_name(self, obj):
+        full = f"{obj.first_name} {obj.last_name}".strip()
+        return full if full else obj.username
+
+    def get_display_name(self, obj):
+        full = f"{obj.last_name} {obj.first_name}".strip()
+        if full:
+            return f"{full} ({obj.username})"
+        return obj.username

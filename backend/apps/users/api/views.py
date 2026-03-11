@@ -1,10 +1,10 @@
-from rest_framework import status, generics
+from rest_framework import status, generics, viewsets, permissions, filters
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model
-from .serializers import UserSerializer, LoginSerializer, ChangePasswordSerializer, ProfileUpdateSerializer
+from .serializers import UserSerializer, LoginSerializer, ChangePasswordSerializer, ProfileUpdateSerializer, UserListSerializer
 
 User = get_user_model()
 
@@ -82,3 +82,16 @@ class ProfileUpdateView(generics.UpdateAPIView):
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
         return Response(UserSerializer(instance).data)
+
+
+class UserViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = UserListSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['username', 'first_name', 'last_name', 'email']
+    ordering_fields = ['last_name', 'first_name', 'username']
+    ordering = ['last_name', 'first_name']
+
+    def get_queryset(self):
+        queryset = User.objects.filter(is_active=True)
+        return queryset
