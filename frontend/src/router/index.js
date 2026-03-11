@@ -22,6 +22,12 @@ const router = createRouter({
       component: () => import('@/components/ProfileView.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/objects/create',
+      name: 'object-create',
+      component: () => import('@/components/ObjectCreateView.vue'),
+      meta: { requiresAuth: true, adminOnly: true },
+    },
   ],
 })
 
