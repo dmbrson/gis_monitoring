@@ -1,13 +1,29 @@
 <template>
   <div class="object-create-page">
     <header class="page-header">
-      <button @click="cancel" class="btn-back">← Назад</button>
+      <button @click="cancel" class="btn-back" title="Вернуться назад">
+        <span class="btn-text">← Назад</span>
+      </button>
       <h1>➕ Новый объект</h1>
       <div class="header-spacer"></div>
     </header>
 
     <div class="form-container">
       <form @submit.prevent="submitForm" class="form-panel">
+
+        <transition name="fade">
+          <div v-if="error" class="form-error global">
+            ⚠️ {{ error }}
+          </div>
+        </transition>
+
+        <transition name="fade">
+          <div v-if="submitting" class="form-overlay">
+            <div class="spinner"></div>
+            <p>Создание объекта...</p>
+          </div>
+        </transition>
+
         <div class="form-section">
           <h3>📋 Основная информация</h3>
           <div class="form-group">
@@ -17,8 +33,10 @@
               v-model="form.title"
               type="text"
               class="form-input"
+              :class="{ 'input-error': errors.title }"
               placeholder="Например: Ремонт ЛЭП-10кВ"
             />
+            <span v-if="errors.title" class="form-error">{{ errors.title }}</span>
           </div>
           <div class="form-group">
             <label for="address">Адрес *</label>
@@ -27,9 +45,12 @@
               v-model="form.address"
               type="text"
               class="form-input"
+              :class="{ 'input-error': errors.address }"
               placeholder="г. Владивосток, ул. Светланская, 1"
             />
+            <span v-if="errors.address" class="form-error">{{ errors.address }}</span>
           </div>
+
           <div class="form-group">
             <label for="region">Район / Регион</label>
             <input
@@ -38,8 +59,11 @@
               type="text"
               class="form-input"
               placeholder="Первореченский, Фрунзенский..."
+              title="Укажите район или регион выполнения работ"
+              :disabled="submitting"
             />
           </div>
+
           <div class="form-group">
             <label for="description">Описание работ</label>
             <textarea
@@ -48,6 +72,7 @@
               class="form-textarea"
               rows="4"
               placeholder="Детали выполняемых работ..."
+              :disabled="submitting"
             ></textarea>
           </div>
         </div>
@@ -56,21 +81,45 @@
           <h3>👥 Ответственные</h3>
           <div class="form-group">
             <label for="status_id">Статус *</label>
-            <select id="status_id" v-model="form.status_id" class="form-select">
+            <select
+              id="status_id"
+              v-model="form.status_id"
+              class="form-select"
+              :class="{ 'input-error': errors.status_id }"
+              title="Выберите текущий статус объекта"
+              :disabled="submitting || !statuses.length"
+            >
               <option value="" disabled>Выберите статус</option>
-              <option v-for="status in statuses" :key="status.id" :value="status.id">
+              <option
+                v-for="status in statuses"
+                :key="status.id"
+                :value="status.id"
+              >
                 {{ status.name }}
               </option>
             </select>
+            <span v-if="errors.status_id" class="form-error">{{ errors.status_id }}</span>
           </div>
           <div class="form-group">
             <label for="responsible_id">Ответственный *</label>
-            <select id="responsible_id" v-model="form.responsible_id" class="form-select">
+            <select
+              id="responsible_id"
+              v-model="form.responsible_id"
+              class="form-select"
+              :class="{ 'input-error': errors.responsible_id }"
+              title="Назначьте сотрудника, ответственного за объект"
+              :disabled="submitting || !users.length"
+            >
               <option value="" disabled>Выберите сотрудника</option>
-              <option v-for="user in users" :key="user.id" :value="user.id">
+              <option
+                v-for="user in users"
+                :key="user.id"
+                :value="user.id"
+              >
                 {{ user.display_name || user.full_name || user.role }}
               </option>
             </select>
+            <span v-if="errors.responsible_id" class="form-error">{{ errors.responsible_id }}</span>
           </div>
         </div>
 
@@ -79,11 +128,29 @@
           <div class="form-row">
             <div class="form-group">
               <label for="start_date">Дата начала *</label>
-              <input id="start_date" v-model="form.start_date" type="date" class="form-input" />
+              <input
+                id="start_date"
+                v-model="form.start_date"
+                type="date"
+                class="form-input"
+                :class="{ 'input-error': errors.start_date }"
+                title="Укажите планируемую дату начала работ"
+                :disabled="submitting"
+              />
+              <span v-if="errors.start_date" class="form-error">{{ errors.start_date }}</span>
             </div>
             <div class="form-group">
               <label for="end_date">Дата окончания *</label>
-              <input id="end_date" v-model="form.end_date" type="date" class="form-input" />
+              <input
+                id="end_date"
+                v-model="form.end_date"
+                type="date"
+                class="form-input"
+                :class="{ 'input-error': errors.end_date }"
+                title="Укажите планируемую дату завершения работ"
+                :disabled="submitting"
+              />
+              <span v-if="errors.end_date" class="form-error">{{ errors.end_date }}</span>
             </div>
           </div>
         </div>
@@ -97,12 +164,28 @@
             </span>
             <span v-else class="coords-placeholder">Кликните по карте для выбора</span>
           </div>
+
+          <span v-if="errors.coordinates" class="form-error">{{ errors.coordinates }}</span>
         </div>
 
         <div class="form-actions">
-          <button type="button" @click="cancel" class="btn-secondary">Отмена</button>
-          <button type="submit" class="btn-primary" :disabled="submitting">
-            {{ submitting ? 'Создание...' : 'Создать объект' }}
+          <button
+            type="button"
+            @click="cancel"
+            class="btn-secondary"
+            :disabled="submitting"
+            title="Отменить создание и вернуться назад"
+          >
+            <span class="btn-text">Отмена</span>
+          </button>
+
+          <button
+            type="submit"
+            class="btn-primary"
+            :disabled="submitting"
+            title="Сохранить новый объект в системе"
+          >
+            <span class="btn-text">{{ submitting ? 'Создание...' : 'Создать объект' }}</span>
           </button>
         </div>
       </form>
@@ -112,6 +195,23 @@
           <span>Выберите местоположение</span>
           <small>Кликните по карте или перетащите маркер</small>
         </div>
+
+        <transition name="fade">
+          <div v-if="error && !submitting" class="map-overlay error">
+            <p class="error-text">⚠️ {{ error }}</p>
+            <button @click="initMap" class="btn-retry" :disabled="loading">
+              <span class="btn-icon">⟲</span>
+              <span class="btn-text">Повторить</span>
+            </button>
+          </div>
+        </transition>
+
+        <transition name="fade">
+          <div v-if="loading && !submitting" class="map-overlay">
+            <div class="spinner"></div>
+            <p>Загрузка карты...</p>
+          </div>
+        </transition>
         <div ref="mapContainer" class="map-wrapper"></div>
       </div>
     </div>
@@ -121,7 +221,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, api } from '@/stores/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -149,9 +249,63 @@ const statuses = ref([])
 const users = ref([])
 const errors = ref({})
 
+let abortController = null
+
 const isAdmin = computed(() => {
   return authStore.user?.role?.name === 'admin' || authStore.user?.is_superuser === true
 })
+
+const fetchStatuses = async () => {
+  try {
+    const response = await api.get('/api/statuses/')
+    let data = []
+    if (Array.isArray(response.data)) {
+      data = response.data
+    } else if (response.data?.results && Array.isArray(response.data.results)) {
+      data = response.data.results
+    } else if (response.data?.objects && Array.isArray(response.data.objects)) {
+      data = response.data.objects
+    }
+    statuses.value = data
+    if (statuses.value.length && !form.value.status_id) {
+      form.value.status_id = statuses.value[0].id
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') return
+    console.warn('Не удалось загрузить статусы:', err)
+  }
+}
+
+const fetchUsers = async () => {
+  if (abortController) abortController.abort()
+  abortController = new AbortController()
+  try {
+    const response = await api.get('/api/auth/users/', {
+      params: { limit: 100, ordering: 'last_name,first_name' },
+      signal: abortController.signal
+    })
+    let data = []
+    if (Array.isArray(response.data)) {
+      data = response.data
+    } else if (response.data?.results && Array.isArray(response.data.results)) {
+      data = response.data.results
+    } else if (response.data?.objects && Array.isArray(response.data.objects)) {
+      data = response.data.objects
+    }
+    users.value = data.filter(u => u.is_active !== false)
+  } catch (err) {
+    if (err.name === 'AbortError') return
+    console.warn('Не удалось загрузить пользователей:', err)
+    users.value = []
+  }
+}
+
+const fetchData = async () => {
+  loading.value = true
+  error.value = null
+  await Promise.all([fetchStatuses(), fetchUsers()])
+  loading.value = false
+}
 
 const cancel = () => {
   if (confirm('Отменить создание объекта?')) {
@@ -159,15 +313,16 @@ const cancel = () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (!isAdmin.value) {
     router.push('/')
     return
   }
-  console.log('ObjectCreate mounted')
+  await fetchData()
 })
 
 onUnmounted(() => {
+  if (abortController) abortController.abort()
   if (map.value) {
     map.value.remove()
     map.value = null
