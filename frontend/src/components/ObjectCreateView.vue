@@ -264,6 +264,7 @@ const isAdmin = computed(() => {
 const fetchStatuses = async () => {
   try {
     const response = await api.get('/api/statuses/')
+
     let data = []
     if (Array.isArray(response.data)) {
       data = response.data
@@ -272,7 +273,9 @@ const fetchStatuses = async () => {
     } else if (response.data?.objects && Array.isArray(response.data.objects)) {
       data = response.data.objects
     }
+
     statuses.value = data
+
     if (statuses.value.length && !form.value.status_id) {
       form.value.status_id = statuses.value[0].id
     }
@@ -285,11 +288,16 @@ const fetchStatuses = async () => {
 const fetchUsers = async () => {
   if (abortController) abortController.abort()
   abortController = new AbortController()
+
   try {
     const response = await api.get('/api/auth/users/', {
-      params: { limit: 100, ordering: 'last_name,first_name' },
+      params: {
+        limit: 100,
+        ordering: 'last_name,first_name'
+      },
       signal: abortController.signal
     })
+
     let data = []
     if (Array.isArray(response.data)) {
       data = response.data
@@ -298,6 +306,7 @@ const fetchUsers = async () => {
     } else if (response.data?.objects && Array.isArray(response.data.objects)) {
       data = response.data.objects
     }
+
     users.value = data.filter(u => u.is_active !== false)
   } catch (err) {
     if (err.name === 'AbortError') return
@@ -330,15 +339,18 @@ const createMarkerElement = (color = '#dc3545', isDraggable = true) => {
     align-items: center;
     justify-content: center;
   `
+
   if (isDraggable) {
     el.onmouseenter = () => { el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)' }
     el.onmouseleave = () => { el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)' }
   }
+
   return el
 }
 
 const initMap = () => {
   if (map.value) return
+
   try {
     map.value = new maplibregl.Map({
       container: mapContainer.value,
@@ -348,6 +360,7 @@ const initMap = () => {
       pitch: 0,
       bearing: 0
     })
+
     map.value.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right')
     map.value.addControl(new maplibregl.GeolocateControl({
       positionOptions: { enableHighAccuracy: true },
@@ -379,9 +392,12 @@ const initMap = () => {
 
 const setMarker = (coordinates) => {
   const [lng, lat] = coordinates
+
   markers.value.forEach(marker => marker.remove())
   markers.value = []
+
   const el = createMarkerElement('#dc3545', true)
+
   const marker = new maplibregl.Marker({
     element: el,
     anchor: 'center',
@@ -389,6 +405,7 @@ const setMarker = (coordinates) => {
   })
     .setLngLat([lng, lat])
     .addTo(map.value)
+
   markers.value.push(marker)
   form.value.coordinates = [lng, lat]
 }
@@ -398,14 +415,18 @@ const reverseGeocode = async (lng, lat) => {
     const url = `https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${import.meta.env.VITE_MAPTILER_KEY}&language=ru`
     const res = await fetch(url)
     const data = await res.json()
+
     if (data.features?.[0]) {
       const feature = data.features[0]
       const context = feature.context || []
+
       const address = feature.place_name?.split(',')[0] || ''
       const region = context.find(c => c.id?.includes('region'))?.text ||
                      context.find(c => c.id?.includes('district'))?.text || ''
+
       const addressInput = document.getElementById('address')
       const regionInput = document.getElementById('region')
+
       if (!addressInput?.matches(':focus')) {
         form.value.address = address
       }
@@ -415,6 +436,66 @@ const reverseGeocode = async (lng, lat) => {
     }
   } catch (e) {
     console.warn('Reverse geocoding failed:', e)
+  }
+}
+
+const validateForm = () => {
+  errors.value = {}
+
+  if (!form.value.title?.trim()) errors.value.title = 'Название обязательно'
+  if (!form.value.address?.trim()) errors.value.address = 'Адрес обязателен'
+  if (!form.value.coordinates || form.value.coordinates.length !== 2) {
+    errors.value.coordinates = 'Выберите точку на карте'
+  }
+  if (!form.value.status_id) errors.value.status_id = 'Выберите статус'
+  if (!form.value.responsible_id) errors.value.responsible_id = 'Выберите ответственного'
+  if (!form.value.start_date) errors.value.start_date = 'Укажите дату начала'
+  if (!form.value.end_date) errors.value.end_date = 'Укажите дату окончания'
+
+  if (form.value.start_date && form.value.end_date &&
+      form.value.end_date < form.value.start_date) {
+    errors.value.end_date = 'Дата окончания не может быть раньше начала'
+  }
+
+  return Object.keys(errors.value).length === 0
+}
+
+const submitForm = async () => {
+  if (!validateForm()) {
+    const firstError = document.querySelector('.form-error')
+    firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    return
+  }
+
+  submitting.value = true
+  error.value = null
+
+  try {
+    const payload = {
+      ...form.value,
+      coordinates_input: form.value.coordinates
+    }
+
+    Object.keys(payload).forEach(key => {
+      if (payload[key] === null) delete payload[key]
+    })
+
+    await api.post('/api/objects/', payload)
+
+    router.push({ name: 'home' })
+    alert('Объект успешно создан!')
+
+  } catch (err) {
+    console.error('Ошибка создания объекта:', err)
+
+    if (err.response?.data) {
+      errors.value = err.response.data
+      error.value = 'Проверьте правильность заполнения формы'
+    } else {
+      error.value = 'Не удалось создать объект. Проверьте соединение.'
+    }
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -429,6 +510,7 @@ onMounted(async () => {
     router.push('/')
     return
   }
+
   initMap()
   await fetchData()
 })
