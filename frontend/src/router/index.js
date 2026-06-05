@@ -28,6 +28,12 @@ const router = createRouter({
       component: () => import('@/components/ObjectCreateView.vue'),
       meta: { requiresAuth: true, adminOnly: true },
     },
+    {
+      path: '/objects/:id',
+      name: 'object-detail',
+      component: () => import('@/components/ObjectDetailView.vue'),
+      meta: { requiresAuth: true }
+    }
   ],
 })
 

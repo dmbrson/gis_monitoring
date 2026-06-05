@@ -4,7 +4,6 @@
       <button @click="cancel" class="btn-back" title="Вернуться назад">
         <span class="btn-text">← Назад</span>
       </button>
-      <h1>➕ Новый объект</h1>
       <div class="header-spacer"></div>
     </header>
 
@@ -25,7 +24,6 @@
         </transition>
 
         <div class="form-section">
-          <h3>📋 Основная информация</h3>
           <div class="form-group">
             <label for="title">Название объекта *</label>
             <input
@@ -156,16 +154,39 @@
         </div>
 
         <div class="form-section">
+              <h3>🖼️ Главное фото</h3>
+              <div class="form-group">
+                <label for="main_photo">Загрузить фото</label>
+
+                <div v-if="photoPreview" class="photo-preview">
+                  <img :src="photoPreview" alt="Preview" class="preview-image" />
+                  <button type="button" @click="clearPhoto" class="btn-remove-photo" title="Удалить фото">×</button>
+                </div>
+
+                <input
+                  id="main_photo"
+                  type="file"
+                  accept="image/*"
+                  @change="handlePhotoUpload"
+                  class="form-file-input"
+                  :disabled="submitting"
+                />
+                <small class="text-secondary">
+                  Допустимые форматы: JPG, PNG, WEBP. Макс. размер: 10 МБ
+                </small>
+                <span v-if="errors.main_photo" class="form-error">{{ errors.main_photo }}</span>
+              </div>
+            </div>
+
+        <div class="form-section">
           <h3>📍 Координаты</h3>
           <div class="coords-info">
             <span class="coords-label">Выбрано:</span>
             <span v-if="form.coordinates" class="coords-value">
-              {{ form.coordinates[1].toFixed(5) }}, {{ form.coordinates[0].toFixed(5) }}
-            </span>
+              {{ form.coordinates[1].toFixed(5) }}, {{ form.coordinates[0].toFixed(5) }}</span>
             <span v-else class="coords-placeholder">Кликните по карте для выбора</span>
-          </div>
-
           <span v-if="errors.coordinates" class="form-error">{{ errors.coordinates }}</span>
+          </div>
         </div>
 
         <div class="form-actions">
@@ -248,12 +269,14 @@ const form = ref({
   status_id: null,
   responsible_id: null,
   start_date: '',
-  end_date: ''
+  end_date: '',
+  main_photo: null
 })
 
 const statuses = ref([])
 const users = ref([])
 const errors = ref({})
+const photoPreview = ref(null)
 
 let abortController = null
 
@@ -458,6 +481,40 @@ const validateForm = () => {
   }
 
   return Object.keys(errors.value).length === 0
+}
+
+const handlePhotoUpload = (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  const validTypes = ['image/jpeg', 'image/png', 'image/webp']
+  if (!validTypes.includes(file.type)) {
+    errors.value.main_photo = 'Только JPG, PNG или WEBP'
+    event.target.value = ''
+    return
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    errors.value.main_photo = 'Максимальный размер: 10 МБ'
+    event.target.value = ''
+    return
+  }
+
+  errors.value.main_photo = null
+  form.value.main_photo = file
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    photoPreview.value = e.target.result
+  }
+  reader.readAsDataURL(file)
+}
+
+const clearPhoto = () => {
+  form.value.main_photo = null
+  photoPreview.value = null
+  const input = document.getElementById('main_photo')
+  if (input) input.value = ''
 }
 
 const submitForm = async () => {
@@ -806,5 +863,66 @@ onUnmounted(() => {
   .btn-primary, .btn-secondary {
     width: 100%;
   }
+}
+
+.photo-preview {
+  position: relative;
+  width: 200px;
+  height: 150px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  border: 2px solid #e9ecef;
+  background: #f8f9fa;
+}
+
+.preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.btn-remove-photo {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(220, 53, 69, 0.9);
+  color: white;
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.btn-remove-photo:hover {
+  background: #dc3545;
+}
+
+.form-file-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px dashed #ced4da;
+  border-radius: 6px;
+  background: white;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.form-file-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.text-secondary {
+  color: #6c757d;
+  font-size: 0.85rem;
+  display: block;
+  margin-top: 4px;
 }
 </style>
