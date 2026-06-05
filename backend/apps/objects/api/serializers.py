@@ -37,19 +37,31 @@ class ObjectSerializer(serializers.ModelSerializer):
         help_text="Формат: [долгота, широта]"
     )
 
+    main_photo = serializers.ImageField(required=False, allow_null=True)
+    main_photo_url = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = Object
         fields = [
             'id', 'code', 'title', 'address', 'region', 'coordinates',
             'coordinates_input', 'description', 'status', 'status_id',
             'responsible', 'responsible_id', 'start_date', 'end_date',
-            'created_at', 'updated_at'
+            'created_at', 'updated_at',
+            'main_photo', 'main_photo_url'
         ]
-        read_only_fields = ['id', 'code', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'code', 'created_at', 'updated_at', 'main_photo_url']
 
     def get_coordinates(self, obj):
         if obj.coordinates:
             return [obj.coordinates.x, obj.coordinates.y]
+        return None
+
+    def get_main_photo_url(self, obj):
+        if obj.main_photo and hasattr(obj.main_photo, 'url'):
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.main_photo.url)
+            return obj.main_photo.url
         return None
 
     def validate_coordinates_input(self, value):

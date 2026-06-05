@@ -99,6 +99,14 @@ class Object(gis_models.Model):
         verbose_name='Дата последнего обновления'
     )
 
+    main_photo = models.ImageField(
+        upload_to='objects/photos/%Y/%m/',
+        blank=True,
+        null=True,
+        verbose_name='Главное фото объекта',
+        help_text='Фотография будет сохранена на сервере'
+    )
+
     class Meta:
         db_table = 'objects'
         verbose_name = 'Объект'
