@@ -90,13 +90,19 @@ class ObjectSerializer(serializers.ModelSerializer):
 
 class HistorySerializer(serializers.ModelSerializer):
     changed_by = UserSerializer(read_only=True)
+    new_status_color = serializers.SerializerMethodField()
+    is_bot = serializers.BooleanField(read_only=True, default=False)
+
+    def get_new_status_color(self, obj):
+        if obj.field_name == 'status' and obj.new_value:
+            status = Status.objects.filter(name=obj.new_value).first()
+            return status.color if status else None
+        return None
 
     class Meta:
         model = History
-        fields = [
-            'id', 'object', 'field_name', 'old_value', 'new_value',
-            'changed_by', 'changed_at'
-        ]
+        fields = ['id', 'object', 'field_name', 'old_value', 'new_value',
+                  'changed_by', 'changed_at', 'new_status_color', 'is_bot']
 
 
 class CommentSerializer(serializers.ModelSerializer):
@@ -104,13 +110,10 @@ class CommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Comment
-        fields = ['id', 'object', 'author', 'text', 'created_at']
-        read_only_fields = ['id', 'created_at', 'author']
+        fields = ['id', 'object', 'author', 'text', 'created_at']  # ← только поля из модели!
+        read_only_fields = ['author', 'created_at']
 
     def create(self, validated_data):
-        request = self.context.get('request')
-        if request and hasattr(request, 'user'):
-            validated_data['author'] = request.user
-        else:
-            raise serializers.ValidationError("Не удалось определить автора")
+        # Автор берётся из запроса
+        validated_data['author'] = self.context['request'].user
         return super().create(validated_data)

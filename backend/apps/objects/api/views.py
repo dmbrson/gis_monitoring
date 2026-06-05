@@ -64,8 +64,6 @@ class ObjectViewSet(viewsets.ModelViewSet):
             return [permissions.IsAuthenticated(), IsManagerOrAdmin()]
         return [permissions.IsAuthenticated()]
 
-    def perform_create(self, serializer):
-        serializer.save()
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -141,9 +139,6 @@ class CommentViewSet(viewsets.ModelViewSet):
             return self.queryset.filter(object__responsible=user)
 
         return self.queryset.none()
-
-    def perform_create(self, serializer):
-        serializer.save(author=self.request.user)
 
     def get_permissions(self):
         if self.action in ['update', 'partial_update', 'destroy']:
