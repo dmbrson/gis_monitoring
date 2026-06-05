@@ -3,6 +3,7 @@ from django.contrib.gis.geos import Point
 from ..models import Status, Object, History, Comment
 from ...users.models import User
 from ...users.api.serializers import UserSerializer
+import json
 
 class StatusSerializer(serializers.ModelSerializer):
     class Meta:
@@ -28,13 +29,11 @@ class ObjectSerializer(serializers.ModelSerializer):
     )
 
     coordinates = serializers.SerializerMethodField()
-    coordinates_input = serializers.ListField(
-        child=serializers.FloatField(),
-        min_length=2,
-        max_length=2,
+
+    coordinates_input = serializers.JSONField(
         write_only=True,
         required=False,
-        help_text="Формат: [долгота, широта]"
+        help_text="Формат: [долгота, широта] или строка '[lng, lat]'"
     )
 
     main_photo = serializers.ImageField(required=False, allow_null=True)
@@ -65,12 +64,30 @@ class ObjectSerializer(serializers.ModelSerializer):
         return None
 
     def validate_coordinates_input(self, value):
-        lng, lat = value[0], value[1]
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                raise serializers.ValidationError(
+                    "Неверный формат координат. Ожидался массив [долгота, широта]"
+                )
+
+        if not isinstance(value, (list, tuple)) or len(value) != 2:
+            raise serializers.ValidationError(
+                "Координаты должны быть массивом из 2 чисел: [долгота, широта]"
+            )
+
+        try:
+            lng, lat = float(value[0]), float(value[1])
+        except (ValueError, TypeError):
+            raise serializers.ValidationError("Координаты должны быть числами")
+
         if not (-180 <= lng <= 180):
             raise serializers.ValidationError("Долгота должна быть в диапазоне от -180 до 180")
         if not (-90 <= lat <= 90):
             raise serializers.ValidationError("Широта должна быть в диапазоне от -90 до 90")
-        return value
+
+        return [lng, lat]
 
     def validate(self, data):
         start_date = data.get('start_date')

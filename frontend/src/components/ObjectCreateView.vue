@@ -528,16 +528,19 @@ const submitForm = async () => {
   error.value = null
 
   try {
-    const payload = {
-      ...form.value,
-      coordinates_input: form.value.coordinates
-    }
+    const formData = new FormData()
 
-    Object.keys(payload).forEach(key => {
-      if (payload[key] === null) delete payload[key]
+    Object.entries(form.value).forEach(([key, value]) => {
+      if (key === 'main_photo' && value instanceof File) {
+        formData.append('main_photo', value)
+      } else if (key === 'coordinates' && value) {
+        formData.append('coordinates_input', JSON.stringify(value))
+      } else if (value !== null && value !== undefined && value !== '') {
+        formData.append(key, value)
+      }
     })
 
-    await api.post('/api/objects/', payload)
+    await api.post('/api/objects/',  formData)
 
     router.push({ name: 'home' })
     alert('Объект успешно создан!')
