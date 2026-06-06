@@ -1,40 +1,47 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import MainLayout from '@/components/layout/MainLayout.vue'
+import AuthLayout from '@/components/layout/AuthLayout.vue'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
       path: '/',
-      name: 'home',
-      component: () => import('@/components/MapDashboardView.vue'),
+      component: MainLayout,
       meta: { requiresAuth: true },
+      children: [
+        {
+          path: '',
+          name: 'home',
+          component: () => import('@/components/MapDashboardView.vue')
+        },
+        {
+          path: 'profile',
+          name: 'profile',
+          component: () => import('@/components/ProfileView.vue')
+        },
+        {
+          path: 'objects/create',
+          name: 'object-create',
+          component: () => import('@/components/ObjectCreateView.vue'),
+          meta: { adminOnly: true }
+        },
+        {
+          path: 'objects/:id',
+          name: 'object-detail',
+          component: () => import('@/components/ObjectDetailView.vue')
+        }
+      ]
     },
     {
       path: '/login',
+      component: AuthLayout,
       name: 'login',
       component: () => import('@/components/LoginView.vue'),
-      meta: { guest: true },
-    },
-    {
-      path: '/profile',
-      name: 'profile',
-      component: () => import('@/components/ProfileView.vue'),
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/objects/create',
-      name: 'object-create',
-      component: () => import('@/components/ObjectCreateView.vue'),
-      meta: { requiresAuth: true, adminOnly: true },
-    },
-    {
-      path: '/objects/:id',
-      name: 'object-detail',
-      component: () => import('@/components/ObjectDetailView.vue'),
-      meta: { requiresAuth: true }
+      meta: { guest: true }
     }
-  ],
+  ]
 })
 
 router.beforeEach(async (to, from, next) => {
