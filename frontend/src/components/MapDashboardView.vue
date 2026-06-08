@@ -2,8 +2,13 @@
   <div class="map-dashboard">
     <aside class="filters-panel">
       <div class="filters-header">
-        <h3>🔍 Фильтры</h3>
-        <button @click="resetFilters" class="btn-reset" title="Сбросить все фильтры">⟲</button>
+        <h3>Фильтры</h3>
+        <button @click="resetFilters" class="btn-reset" title="Сбросить все фильтры">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+          </svg>
+        </button>
       </div>
 
       <div class="filter-group">
@@ -48,29 +53,22 @@
       <div class="filter-group">
         <label>Период работ</label>
         <div class="date-range">
-          <input v-model="filters.start_date" @change="onFilterChange" type="date" class="form-input" title="Дата начала" />
+          <input v-model="filters.start_date" @change="onFilterChange" type="date" class="form-input" />
           <span class="date-separator">—</span>
-          <input v-model="filters.end_date" @change="onFilterChange" type="date" class="form-input" title="Дата окончания" />
+          <input v-model="filters.end_date" @change="onFilterChange" type="date" class="form-input" />
         </div>
       </div>
 
       <div class="legend" v-if="statuses.length">
-        <h4>📋 Статусы</h4>
+        <h4>Статусы</h4>
         <div v-for="status in statuses" :key="status.id" class="legend-item">
-          <span class="legend-color" :style="{ backgroundColor: status.color }" :title="status.description"></span>
+          <span class="legend-color" :style="{ backgroundColor: status.color }"></span>
           <span class="legend-name">{{ status.name }}</span>
         </div>
       </div>
     </aside>
 
     <main class="map-container" ref="mapContainer">
-      <div class="create-object-btn" v-if="isAdmin">
-        <button @click="createNewObject" class="btn-primary" title="Добавить новый объект">
-          <span class="btn-icon">+</span>
-          <span class="btn-text">Объект</span>
-        </button>
-      </div>
-
       <transition name="fade">
         <div v-if="loading" class="map-overlay">
           <div class="spinner"></div>
@@ -80,14 +78,10 @@
 
       <transition name="fade">
         <div v-if="error" class="map-overlay error">
-          <p class="error-text">⚠️ {{ error }}</p>
+          <p class="error-text">{{ error }}</p>
           <button @click="fetchData" class="btn-retry">Повторить</button>
         </div>
       </transition>
-
-      <div class="objects-count" v-if="!loading && !error">
-        📍 {{ objectsCount }} объектов
-      </div>
 
       <div class="map-hint" v-if="!loading && objectsCount === 0">
         <p>Объекты не найдены</p>
@@ -98,7 +92,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore, api } from '@/stores/auth'
 import maplibregl from 'maplibre-gl'
@@ -147,7 +141,7 @@ const fetchObjects = async () => {
   try {
     const params = {}
     Object.entries(filters.value).forEach(([key, val]) => {
-      if (val) params[key] = val
+      if (val && val !== '') params[key] = val
     })
 
     const response = await api.get('/api/objects/', {
@@ -166,6 +160,10 @@ const fetchObjects = async () => {
 
     objects.value = data
     objectsCount.value = response.data.count ?? data.length
+
+    if (map.value && map.value.loaded()) {
+      updateMarkers()
+    }
   } catch (err) {
     if (err.name === 'AbortError') return
     console.error('Ошибка загрузки объектов:', err)
@@ -186,7 +184,7 @@ const fetchStatuses = async () => {
 
     statuses.value = data
   } catch (err) {
-    console.warn('Статусы не загружены (возможно, endpoint не настроен):', err)
+    console.warn('Статусы не загружены:', err)
     statuses.value = []
   }
 }
@@ -237,12 +235,12 @@ const createMarkerElement = (color, isActive = true) => {
     border: 3px solid white;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     cursor: ${isActive ? 'pointer' : 'default'};
-    will-change: auto;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    will-change: transform;
+    position: absolute;
   `
+
+  el.innerHTML = '<span style="display:block;width:100%;height:100%;border-radius:50%"></span>'
+
   if (isActive) {
     el.onmouseenter = () => { el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)' }
     el.onmouseleave = () => { el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)' }
@@ -287,7 +285,7 @@ const updateMarkers = () => {
 
     el.addEventListener('click', (e) => {
       e.stopPropagation()
-      console.log('Клик по объекту:', obj.id)
+      router.push({ name: 'object-detail', params: { id: obj.id } })
     })
 
     markers.value.push(marker)
@@ -319,6 +317,16 @@ const resetFilters = () => {
   fetchData()
 }
 
+watch(
+  () => objects.value,
+  () => {
+    if (map.value && map.value.loaded()) {
+      updateMarkers()
+    }
+  },
+  { deep: true }
+)
+
 onMounted(async () => {
   initMap()
   await fetchData()
@@ -335,27 +343,29 @@ onUnmounted(() => {
 })
 </script>
 
-
 <style scoped>
 .map-dashboard {
   display: flex;
-  height: calc(100vh - 64px);
+  height: 100%;
+  width: 100%;
   background: #f8f9fa;
   position: relative;
+  overflow: hidden;
 }
 
 .filters-panel {
-  width: 340px;
+  width: 358px;
   min-width: 280px;
   background: white;
   border-right: 1px solid #e0e0e0;
   padding: 16px 20px;
   overflow-y: auto;
   z-index: 10;
-  box-shadow: 2px 0 12px rgba(0,0,0,0.08);
+  box-shadow: 2px 0 12px rgba(0,0,0,0.05);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
+  flex-shrink: 0;
 }
 
 .filters-header {
@@ -369,9 +379,12 @@ onUnmounted(() => {
 
 .filters-header h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #2c3e50;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.85rem;
 }
 
 .btn-reset {
@@ -381,7 +394,6 @@ onUnmounted(() => {
   height: 32px;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 1.1rem;
   color: #666;
   display: flex;
   align-items: center;
@@ -403,7 +415,7 @@ onUnmounted(() => {
   margin-bottom: 6px;
   font-weight: 500;
   color: #495057;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .form-input,
@@ -443,9 +455,11 @@ onUnmounted(() => {
 
 .legend h4 {
   margin: 0 0 12px 0;
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: #2c3e50;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .legend-item {
@@ -458,24 +472,20 @@ onUnmounted(() => {
 }
 
 .legend-color {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   border: 2px solid white;
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
   flex-shrink: 0;
 }
 
-.legend-name {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .map-container {
   flex: 1;
   position: relative;
   background: #e9ecef;
+  min-width: 0;
+  min-height: 0;
 }
 
 .map-overlay {
@@ -534,19 +544,6 @@ onUnmounted(() => {
   background: #0b5ed7;
 }
 
-.objects-count {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  background: white;
-  padding: 8px 16px;
-  border-radius: 20px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #333;
-  z-index: 5;
-}
 .map-hint {
   position: absolute;
   top: 50%;
@@ -570,7 +567,17 @@ onUnmounted(() => {
   color: #6c757d;
 }
 
-@media (max-width: 900px) {
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+@media (max-width: 768px) {
   .map-dashboard {
     flex-direction: column;
   }
@@ -584,6 +591,7 @@ onUnmounted(() => {
 
   .map-container {
     height: 55vh;
+    flex: none;
   }
 }
 
@@ -601,55 +609,5 @@ onUnmounted(() => {
   .date-separator {
     display: none;
   }
-}
-.create-object-btn {
-  position: absolute;
-  bottom: 24px;
-  left: 24px;
-  z-index: 10;
-}
-
-.btn-primary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #0d6efd;
-  color: white;
-  border: none;
-  padding: 12px 20px;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
-  transition: all 0.2s;
-}
-
-.btn-primary:hover {
-  background: #0b5ed7;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(13, 110, 253, 0.4);
-}
-
-.btn-icon {
-  font-size: 1.2rem;
-  font-weight: bold;
-}
-@media (max-width: 900px) {
-  .map-dashboard { flex-direction: column; }
-  .filters-panel {
-    width: 100%;
-    max-height: 45vh;
-    border-right: none;
-    border-bottom: 1px solid #e0e0e0;
-  }
-  .map-container { height: 55vh; }
-}
-@media (max-width: 480px) {
-  .filters-panel { padding: 12px 16px; }
-  .date-range { flex-direction: column; align-items: stretch; gap: 4px; }
-  .date-separator { display: none; }
-  .btn-text { display: none; }
-  .btn-primary { padding: 12px; border-radius: 50%; }
 }
 </style>
