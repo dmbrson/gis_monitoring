@@ -1,12 +1,5 @@
 <template>
   <div class="object-create-page">
-    <header class="page-header">
-      <button @click="cancel" class="btn-back" title="Вернуться назад">
-        <span class="btn-text">← Назад</span>
-      </button>
-      <div class="header-spacer"></div>
-    </header>
-
     <div class="form-container">
       <form @submit.prevent="submitForm" class="form-panel">
 
@@ -76,7 +69,7 @@
         </div>
 
         <div class="form-section">
-          <h3>👥 Ответственные</h3>
+          <h3>Ответственный</h3>
           <div class="form-group">
             <label for="status_id">Статус *</label>
             <select
@@ -122,7 +115,7 @@
         </div>
 
         <div class="form-section">
-          <h3>📅 Сроки работ</h3>
+          <h3>Сроки работ</h3>
           <div class="form-row">
             <div class="form-group">
               <label for="start_date">Дата начала *</label>
@@ -154,7 +147,7 @@
         </div>
 
         <div class="form-section">
-              <h3>🖼️ Главное фото</h3>
+              <h3>Главное фото</h3>
               <div class="form-group">
                 <label for="main_photo">Загрузить фото</label>
 
@@ -179,7 +172,7 @@
             </div>
 
         <div class="form-section">
-          <h3>📍 Координаты</h3>
+          <h3>Координаты</h3>
           <div class="coords-info">
             <span class="coords-label">Выбрано:</span>
             <span v-if="form.coordinates" class="coords-value">
@@ -236,6 +229,39 @@
         <div ref="mapContainer" class="map-wrapper"></div>
       </div>
     </div>
+
+    <transition name="fade">
+      <div v-if="showCropper" class="cropper-modal">
+        <div class="cropper-modal-content">
+          <div class="cropper-header">
+            <h3>Обрежьте фото (16/9)</h3>
+            <button @click="cancelCrop" class="btn-close" type="button">×</button>
+          </div>
+
+          <div class="cropper-wrapper">
+            <Cropper
+              ref="cropperRef"
+              :src="tempImage"
+              :stencil-props="{
+                aspectRatio: 16 / 9
+              }"
+              :resize-image="{ adjustStencil: false }"
+              :wheel-resize="true"
+              class="cropper"
+            />
+          </div>
+
+          <div class="cropper-actions">
+            <button @click="cancelCrop" class="btn-secondary" type="button">
+              Отмена
+            </button>
+            <button @click="applyCrop" class="btn-primary" type="button">
+              Применить
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -245,6 +271,8 @@ import { useRouter } from 'vue-router'
 import { useAuthStore, api } from '@/stores/auth'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import { Cropper } from 'vue-advanced-cropper'
+import 'vue-advanced-cropper/dist/style.css'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -277,6 +305,11 @@ const statuses = ref([])
 const users = ref([])
 const errors = ref({})
 const photoPreview = ref(null)
+
+const showCropper = ref(false)
+const tempImage = ref(null)
+const cropperRef = ref(null)
+const croppedFile = ref(null)
 
 let abortController = null
 
@@ -501,17 +534,84 @@ const handlePhotoUpload = (event) => {
   }
 
   errors.value.main_photo = null
-  form.value.main_photo = file
 
   const reader = new FileReader()
   reader.onload = (e) => {
-    photoPreview.value = e.target.result
+    tempImage.value = e.target.result
+    showCropper.value = true
   }
   reader.readAsDataURL(file)
 }
 
+const cancelCrop = () => {
+  showCropper.value = false
+  tempImage.value = null
+  const input = document.getElementById('main_photo')
+  if (input) input.value = ''
+}
+
+const applyCrop = async () => {
+  if (!cropperRef.value) return
+
+  try {
+    const { coordinates } = cropperRef.value.getResult()
+    const canvas = document.createElement('canvas')
+
+    const width = Math.round(coordinates.width)
+    const height = Math.round(coordinates.height)
+
+    canvas.width = width
+    canvas.height = height
+
+    const ctx = canvas.getContext('2d')
+    const image = new Image()
+
+    await new Promise((resolve, reject) => {
+      image.onload = resolve
+      image.onerror = reject
+      image.src = tempImage.value
+    })
+
+    ctx.drawImage(
+      image,
+      coordinates.left,
+      coordinates.top,
+      coordinates.width,
+      coordinates.height,
+      0,
+      0,
+      width,
+      height
+    )
+
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9))
+
+    const file = new File([blob], 'cropped-photo.jpg', {
+      type: 'image/jpeg',
+      lastModified: Date.now()
+    })
+
+    croppedFile.value = file
+    form.value.main_photo = file
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      photoPreview.value = e.target.result
+    }
+    reader.readAsDataURL(file)
+
+    showCropper.value = false
+    tempImage.value = null
+
+  } catch (err) {
+    console.error('Ошибка при обрезке:', err)
+    errors.value.main_photo = 'Не удалось обработать изображение'
+  }
+}
+
 const clearPhoto = () => {
   form.value.main_photo = null
+  croppedFile.value = null
   photoPreview.value = null
   const input = document.getElementById('main_photo')
   if (input) input.value = ''
@@ -593,36 +693,6 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-.page-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 24px;
-  background: white;
-  border-bottom: 1px solid #e0e0e0;
-  position: sticky;
-  top: 0;
-  z-index: 20;
-}
-
-.btn-back {
-  background: #f1f3f5;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 1rem;
-  color: #495057;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  transition: background 0.2s;
-}
-
-.btn-back:hover {
-  background: #e2e6ea;
-}
-
 .page-header h1 {
   margin: 0;
   font-size: 1.3rem;
@@ -630,9 +700,6 @@ onUnmounted(() => {
   color: #2c3e50;
 }
 
-.header-spacer {
-  flex: 1;
-}
 
 .form-container {
   display: flex;
@@ -927,5 +994,111 @@ onUnmounted(() => {
   font-size: 0.85rem;
   display: block;
   margin-top: 4px;
+}
+
+.cropper-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.cropper-modal-content {
+  background: white;
+  border-radius: 12px;
+  max-width: 900px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.cropper-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.cropper-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #2c3e50;
+}
+
+.btn-close {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: #6c757d;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.btn-close:hover {
+  background: #f1f3f5;
+  color: #2c3e50;
+}
+
+.cropper-wrapper {
+  flex: 1;
+  padding: 24px;
+  background: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.cropper {
+  max-width: 100%;
+  max-height: 100%;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.cropper-actions {
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e0e0e0;
+  background: white;
+}
+
+.cropper-actions .btn-primary,
+.cropper-actions .btn-secondary {
+  flex: 1;
+}
+
+:deep(.cropper__wrapper) {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+:deep(.cropper__stencil) {
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+}
+
+:deep(.cropper__image) {
+  max-width: 100%;
+  max-height: 100%;
 }
 </style>
