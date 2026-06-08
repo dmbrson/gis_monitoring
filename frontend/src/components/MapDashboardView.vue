@@ -115,6 +115,9 @@ const loading = ref(true)
 const error = ref(null)
 const objectsCount = ref(0)
 
+let hoverPopup = null
+let hideTimeout = null
+
 const filters = ref({
   status: '',
   responsible: '',
@@ -223,29 +226,83 @@ const initMap = () => {
   }
 }
 
+const initHoverPopup = () => {
+  if (!hoverPopup) {
+    hoverPopup = new maplibregl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      className: 'custom-hover-card',
+      offset: 15,
+      maxWidth: '320px'
+    })
+  }
+  return hoverPopup
+}
+
 const createMarkerElement = (color, isActive = true) => {
   const el = document.createElement('div')
   el.className = 'map-marker'
 
   el.style.cssText = `
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    border-radius: 100%;
     background-color: ${color};
-    border: 3px solid white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    border: 4px solid white;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
     cursor: ${isActive ? 'pointer' : 'default'};
-    will-change: transform;
-    position: absolute;
+    transition: box-shadow 0.2s ease;
   `
 
   el.innerHTML = '<span style="display:block;width:100%;height:100%;border-radius:50%"></span>'
-
-  if (isActive) {
-    el.onmouseenter = () => { el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)' }
-    el.onmouseleave = () => { el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)' }
-  }
   return el
+}
+
+const createCardElement = (obj) => {
+  const card = document.createElement('div')
+  card.className = 'hover-card'
+
+  const imageUrl = obj.main_photo_url || `https://placehold.co/320x140/e9ecef/6c757d?text=Нет+фото`
+
+  let responsibleName = 'Не назначен'
+  if (obj.responsible) {
+    const firstName = obj.responsible.first_name || ''
+    const lastName = obj.responsible.last_name || ''
+    const username = obj.responsible.username || ''
+
+    if (firstName || lastName) {
+      responsibleName = `${firstName} ${lastName}`.trim()
+    } else if (username) {
+      responsibleName = username
+    }
+  }
+
+  card.innerHTML = `
+    <div class="hover-card-image">
+      <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(obj.title)}" onerror="this.src='https://placehold.co/320x140/e9ecef/6c757d?text=Нет+фото'" />
+    </div>
+    <div class="hover-card-content">
+      <h4 class="hover-card-title">${escapeHtml(obj.title)}</h4>
+
+      <div class="hover-card-info">
+        <div class="hover-card-row">
+          <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+          </svg>
+          <span class="text">${escapeHtml(obj.address)}</span>
+        </div>
+        <div class="hover-card-row">
+          <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          <span class="text">${escapeHtml(responsibleName)}</span>
+        </div>
+      </div>
+    </div>
+  `
+  return card
 }
 
 const updateMarkers = () => {
@@ -257,36 +314,53 @@ const updateMarkers = () => {
   markers.value.forEach(marker => marker.remove())
   markers.value = []
 
+  if (hoverPopup) {
+    hoverPopup.remove()
+  }
+
   objects.value.forEach(obj => {
     if (!obj?.coordinates || !Array.isArray(obj.coordinates) || obj.coordinates.length !== 2) return
     const [lng, lat] = obj.coordinates
     const statusColor = /^#[0-9a-f]{6}$/i.test(obj.status?.color) ? obj.status.color : '#6c757d'
-    const statusName = escapeHtml(obj.status?.name || 'Без статуса')
 
     const el = createMarkerElement(statusColor)
+    const cardElement = createCardElement(obj)
 
-    const popup = new maplibregl.Popup({
-      offset: 20,
-      closeButton: true,
-      closeOnClick: false
-    }).setHTML(`
-      <div class="marker-popup">
-        <strong>${escapeHtml(obj.title)}</strong><br>
-        <small class="address">${escapeHtml(obj.address)}</small><br>
-        <div class="status-badge" style="color: ${statusColor}">● ${statusName}</div>
-        ${obj.code ? `<small class="code">${escapeHtml(obj.code)}</small>` : ''}
-      </div>
-    `)
+    cardElement.addEventListener('mouseenter', () => {
+      clearTimeout(hideTimeout)
+    })
+    cardElement.addEventListener('mouseleave', () => {
+      hideTimeout = setTimeout(() => {
+        if (hoverPopup) hoverPopup.remove()
+      }, 150)
+    })
 
-    const marker = new maplibregl.Marker({ element: el, anchor: 'center', offset: [0, -14] })
-      .setLngLat([lng, lat])
-      .setPopup(popup)
-      .addTo(map.value)
+    el.addEventListener('mouseenter', () => {
+      clearTimeout(hideTimeout)
+      el.classList.add('marker-hover')
+
+      const popup = initHoverPopup()
+      popup.setLngLat([lng, lat])
+           .setDOMContent(cardElement)
+           .addTo(map.value)
+    })
+
+    el.addEventListener('mouseleave', () => {
+      el.classList.remove('marker-hover')
+      hideTimeout = setTimeout(() => {
+        if (hoverPopup) hoverPopup.remove()
+      }, 150)
+    })
 
     el.addEventListener('click', (e) => {
       e.stopPropagation()
+      if (hoverPopup) hoverPopup.remove()
       router.push({ name: 'object-detail', params: { id: obj.id } })
     })
+
+    const marker = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, 0] })
+      .setLngLat([lng, lat])
+      .addTo(map.value)
 
     markers.value.push(marker)
   })
@@ -342,6 +416,48 @@ onUnmounted(() => {
   }
 })
 </script>
+
+<style>
+.custom-hover-card .maplibregl-popup-tip {
+  display: none;
+
+}
+
+.custom-hover-card .maplibregl-popup-content {
+  padding: 0;
+  border-radius: 30px;
+  background: #e0e0e0;
+  color: #333;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15), 0 4px 10px rgba(0, 0, 0, 0.1) !important;
+  overflow: hidden;
+  border: none;
+}
+
+.hover-card-image {
+  width: 100%;
+  height: 130px;
+  background: #f1f3f5;
+  position: relative;
+  overflow: hidden;
+}
+.hover-card-content {
+  padding: 10px;
+}
+
+.hover-card-image {
+  width: 100%;
+  aspect-ratio: 320/140;
+  background: #f1f3f5;
+  overflow: hidden;
+}
+
+.hover-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+</style>
 
 <style scoped>
 .map-dashboard {
