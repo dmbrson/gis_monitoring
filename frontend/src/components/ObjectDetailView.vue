@@ -116,6 +116,22 @@
                 <span v-if="item.is_bot" class="bot-badge" title="Отправлено через Max-бота"></span>
                 {{ item.author_name || item.changed_by_name || 'Система' }}
               </span>
+              <div v-if="item.type === 'comment' && canEditComment(item)" class="comment-actions-inline">
+                <button
+                  @click="openEditCommentModal(item)"
+                  class="btn-icon-sm"
+                  title="Редактировать"
+                >
+                  ✏️
+                </button>
+                <button
+                  @click="confirmDeleteComment(item)"
+                  class="btn-icon-sm btn-danger-sm"
+                  title="Удалить"
+                >
+                  🗑️
+                </button>
+              </div>
             </div>
 
             <div v-if="item.type === 'status_change'" class="status-change">
@@ -146,7 +162,7 @@
     </section>
 
     <section class="comment-form-section" v-if="object">
-      <h4>Добавить комментарий</h4>
+      <h4>💬 Добавить комментарий</h4>
       <form @submit.prevent="submitComment" class="comment-form">
         <textarea
           v-model="newComment"
@@ -211,6 +227,37 @@
       </div>
     </div>
 
+    <div v-if="showEditCommentModal" class="modal-overlay" @click.self="closeEditCommentModal">
+      <div class="modal">
+        <h4>Редактировать комментарий</h4>
+        <textarea
+          v-model="editCommentText"
+          class="form-input"
+          rows="4"
+          :disabled="editCommentLoading"
+        ></textarea>
+        <div class="modal-actions">
+          <button @click="closeEditCommentModal" class="btn-secondary" :disabled="editCommentLoading">Отмена</button>
+          <button @click="saveEditComment" class="btn-primary" :disabled="editCommentLoading || !editCommentText.trim()">
+            {{ editCommentLoading ? 'Сохранение...' : 'Сохранить' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showDeleteConfirmModal" class="modal-overlay" @click.self="closeDeleteConfirmModal">
+      <div class="modal">
+        <h4>Удалить комментарий?</h4>
+        <p class="modal-text">Это действие нельзя отменить. Комментарий будет удалён навсегда.</p>
+        <div class="modal-actions">
+          <button @click="closeDeleteConfirmModal" class="btn-secondary" :disabled="deleteCommentLoading">Отмена</button>
+          <button @click="deleteComment" class="btn-danger" :disabled="deleteCommentLoading">
+            {{ deleteCommentLoading ? 'Удаление...' : 'Удалить' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="showPhotoModal" class="modal-overlay photo-modal" @click.self="closePhotoModal">
       <button class="modal-close" @click="closePhotoModal">×</button>
       <img :src="currentPhoto" class="modal-image" alt="Preview" />
@@ -238,11 +285,20 @@ const statusLoading = ref(false)
 
 const showStatusModal = ref(false)
 const showPhotoModal = ref(false)
+const showEditCommentModal = ref(false)
+const showDeleteConfirmModal = ref(false)
 const currentPhoto = ref('')
 const newStatusId = ref(null)
 const statusChangeComment = ref('')
 const newComment = ref('')
-const commentPhotos = ref([]) // [{ file: File, preview: string }]
+const commentPhotos = ref([])
+
+const editCommentId = ref(null)
+const editCommentText = ref('')
+const editCommentLoading = ref(false)
+
+const deleteCommentId = ref(null)
+const deleteCommentLoading = ref(false)
 
 const authUser = computed(() => authStore.user)
 
@@ -308,6 +364,12 @@ const roleLabels = {
   master: 'Мастер'
 }
 
+const canEditComment = (comment) => {
+  if (!authUser.value) return false
+  if (isAdmin.value) return true
+  return comment.author_id === authUser.value.id
+}
+
 const mergedTimeline = computed(() => {
   const items = []
 
@@ -326,7 +388,8 @@ const mergedTimeline = computed(() => {
         old_value: h.old_value,
         new_value: h.new_value,
         new_status_color: h.new_status_color,
-        is_bot: h.is_bot || false
+        is_bot: h.is_bot || false,
+        author_id: h.changed_by?.id || null
       })
     })
   }
@@ -342,6 +405,7 @@ const mergedTimeline = computed(() => {
         type: 'comment',
         created_at: c.created_at,
         author_name: authorName,
+        author_id: c.author?.id || null,
         text: c.text,
         photos: c.photos || [],
         is_bot: c.is_bot || false
@@ -441,6 +505,68 @@ const submitComment = async () => {
     alert('Не удалось отправить комментарий')
   } finally {
     submittingComment.value = false
+  }
+}
+
+const openEditCommentModal = (comment) => {
+  editCommentId.value = comment.id
+  editCommentText.value = comment.text
+  showEditCommentModal.value = true
+}
+
+const closeEditCommentModal = () => {
+  showEditCommentModal.value = false
+  editCommentId.value = null
+  editCommentText.value = ''
+}
+
+const saveEditComment = async () => {
+  if (!editCommentId.value || !editCommentText.value.trim()) return
+
+  editCommentLoading.value = true
+  try {
+    await api.patch(`/api/comments/${editCommentId.value}/`, {
+      text: editCommentText.value.trim()
+    })
+
+    const { data } = await api.get(`/api/objects/${object.value.id}/comments/`)
+    comments.value = data?.results || data || []
+
+    closeEditCommentModal()
+  } catch (err) {
+    console.error('Ошибка редактирования комментария:', err)
+    alert('Не удалось редактировать комментарий')
+  } finally {
+    editCommentLoading.value = false
+  }
+}
+
+const confirmDeleteComment = (comment) => {
+  deleteCommentId.value = comment.id
+  showDeleteConfirmModal.value = true
+}
+
+const closeDeleteConfirmModal = () => {
+  showDeleteConfirmModal.value = false
+  deleteCommentId.value = null
+}
+
+const deleteComment = async () => {
+  if (!deleteCommentId.value) return
+
+  deleteCommentLoading.value = true
+  try {
+    await api.delete(`/api/comments/${deleteCommentId.value}/`)
+
+    const { data } = await api.get(`/api/objects/${object.value.id}/comments/`)
+    comments.value = data?.results || data || []
+
+    closeDeleteConfirmModal()
+  } catch (err) {
+    console.error('Ошибка удаления комментария:', err)
+    alert('Не удалось удалить комментарий')
+  } finally {
+    deleteCommentLoading.value = false
   }
 }
 
@@ -811,6 +937,35 @@ onMounted(() => {
   font-size: 1rem;
 }
 
+.comment-actions-inline {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.btn-icon-sm {
+  background: transparent;
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  padding: 0;
+}
+
+.btn-icon-sm:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.btn-danger-sm:hover {
+  background: rgba(220, 53, 69, 0.1);
+}
+
 .status-change {
   margin-top: 8px;
 }
@@ -1001,6 +1156,12 @@ onMounted(() => {
   color: #2c3e50;
 }
 
+.modal-text {
+  color: #6c757d;
+  margin: 0 0 20px 0;
+  line-height: 1.5;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -1021,6 +1182,42 @@ onMounted(() => {
 
 .btn-secondary:hover {
   background: #5a6268;
+}
+
+.btn-danger {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.btn-danger:hover {
+  background: #c82333;
+}
+
+.btn-primary {
+  background: #0d6efd;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #0b5ed7;
+}
+
+.btn-primary:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .photo-modal .modal-close {
