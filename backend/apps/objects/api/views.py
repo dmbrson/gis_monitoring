@@ -123,7 +123,7 @@ class ObjectViewSet(viewsets.ModelViewSet):
 
 
 class CommentViewSet(viewsets.ModelViewSet):
-    queryset = Comment.objects.select_related('author', 'object').all()
+    queryset = Comment.objects.select_related('author', 'object').prefetch_related('photos').all()
     serializer_class = CommentSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -144,3 +144,8 @@ class CommentViewSet(viewsets.ModelViewSet):
         if self.action in ['update', 'partial_update', 'destroy']:
             return [permissions.IsAuthenticated(), IsCommentOwnerOrAdmin()]
         return [permissions.IsAuthenticated()]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context

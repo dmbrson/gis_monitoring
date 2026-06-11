@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.gis.geos import Point
-from ..models import Status, Object, History, Comment
+from ..models import Status, Object, History, Comment, CommentPhoto
 from ...users.models import User
 from ...users.api.serializers import UserSerializer
 import json
@@ -134,15 +134,46 @@ class HistorySerializer(serializers.ModelSerializer):
                   'changed_by', 'changed_at', 'new_status_color', 'is_bot']
 
 
+class CommentPhotoSerializer(serializers.ModelSerializer):
+    photo_url = serializers.SerializerMethodField()
+
+    def get_photo_url(self, obj):
+        if obj.photo and hasattr(obj.photo, 'url'):
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.photo.url)
+            return obj.photo.url
+        return None
+
+    class Meta:
+        model = CommentPhoto
+        fields = ['id', 'photo', 'photo_url', 'uploaded_at']
+        read_only_fields = ['uploaded_at']
+
+
 class CommentSerializer(serializers.ModelSerializer):
     author = UserSerializer(read_only=True)
+    photos = CommentPhotoSerializer(many=True, read_only=True)
+    photo_files = serializers.ListField(
+        child=serializers.ImageField(),
+        write_only=True,
+        required=False
+    )
 
     class Meta:
         model = Comment
-        fields = ['id', 'object', 'author', 'text', 'created_at']  # ← только поля из модели!
-        read_only_fields = ['author', 'created_at']
+        fields = ['id', 'object', 'author', 'text', 'created_at', 'photos', 'photo_files']
+        read_only_fields = ['author', 'created_at', 'photos']
 
     def create(self, validated_data):
-        # Автор берётся из запроса
+        photo_files = validated_data.pop('photo_files', [])
         validated_data['author'] = self.context['request'].user
-        return super().create(validated_data)
+        comment = super().create(validated_data)
+
+        for photo_file in photo_files:
+            CommentPhoto.objects.create(
+                comment=comment,
+                photo=photo_file
+            )
+
+        return comment

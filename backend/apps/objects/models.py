@@ -187,3 +187,29 @@ class Comment(models.Model):
 
     def __str__(self):
         return f"Комментарий от {self.author.username} к {self.object.title[:30]}"
+
+
+class CommentPhoto(models.Model):
+    comment = models.ForeignKey(
+        Comment,
+        on_delete=models.CASCADE,
+        related_name='photos',
+        verbose_name='Комментарий'
+    )
+    photo = models.ImageField(
+        upload_to='comments/photos/%Y/%m/',
+        verbose_name='Фото'
+    )
+    uploaded_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Дата загрузки'
+    )
+
+    class Meta:
+        db_table = 'comment_photos'
+        verbose_name = 'Фото комментария'
+        verbose_name_plural = 'Фото комментариев'
+        ordering = ['uploaded_at']
+
+    def __str__(self):
+        return f"Фото к комментарию {self.comment.id}"
