@@ -135,9 +135,9 @@
               <img
                 v-for="(photo, idx) in item.photos"
                 :key="idx"
-                :src="photo"
+                :src="photo.photo_url || photo"
                 class="comment-photo"
-                @click="openPhotoModal(photo)"
+                @click="openPhotoModal(photo.photo_url || photo)"
               />
             </div>
           </div>
@@ -156,12 +156,38 @@
           :disabled="submittingComment"
         ></textarea>
 
+        <div v-if="commentPhotos.length" class="comment-photo-preview">
+          <div
+            v-for="(photo, idx) in commentPhotos"
+            :key="idx"
+            class="preview-item"
+          >
+            <img :src="photo.preview" class="preview-thumb" />
+            <button
+              type="button"
+              @click="removeCommentPhoto(idx)"
+              class="remove-photo-btn"
+              title="Удалить фото"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
         <div class="comment-actions">
-          <button type="button" class="btn-icon" title="Прикрепить фото" disabled>
+          <label class="btn-icon btn-attach" title="Прикрепить фото">
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              @change="handleCommentPhotoUpload"
+              :disabled="submittingComment"
+              hidden
+            />
             📎
-          </button>
-          <small class="text-secondary">📎 Фото можно прикрепить через Max-бота</small>
-          <button type="submit" class="btn-primary" :disabled="submittingComment || !newComment.trim()">
+          </label>
+          <small class="text-secondary">Можно прикрепить несколько фото (JPG, PNG)</small>
+          <button type="submit" class="btn-primary" :disabled="submittingComment || (!newComment.trim() && commentPhotos.length === 0)">
             {{ submittingComment ? 'Отправка...' : 'Отправить' }}
           </button>
         </div>
@@ -196,7 +222,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore, api } from '@/stores/auth'
-import { escapeHtml } from '@/utils/sanitize'
 
 const route = useRoute()
 const router = useRouter()
@@ -217,6 +242,7 @@ const currentPhoto = ref('')
 const newStatusId = ref(null)
 const statusChangeComment = ref('')
 const newComment = ref('')
+const commentPhotos = ref([]) // [{ file: File, preview: string }]
 
 const authUser = computed(() => authStore.user)
 
@@ -359,20 +385,60 @@ const fetchData = async () => {
   }
 }
 
+const handleCommentPhotoUpload = (event) => {
+  const files = Array.from(event.target.files || [])
+
+  files.forEach(file => {
+    if (!file.type.startsWith('image/')) return
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      commentPhotos.value.push({
+        file: file,
+        preview: e.target.result
+      })
+    }
+    reader.readAsDataURL(file)
+  })
+
+  event.target.value = ''
+}
+
+const removeCommentPhoto = (index) => {
+  commentPhotos.value.splice(index, 1)
+}
+
 const submitComment = async () => {
-  if (!newComment.value.trim() || !object.value) return
+  if (!object.value) return
+  if (!newComment.value.trim() && commentPhotos.value.length === 0) return
 
   submittingComment.value = true
   try {
-    await api.post('/api/comments/', {
-      object: object.value.id,
-      text: newComment.value.trim()
+    const formData = new FormData()
+    formData.append('object', object.value.id)
+    if (newComment.value.trim()) {
+      formData.append('text', newComment.value.trim())
+    }
+
+    commentPhotos.value.forEach((photo, idx) => {
+      formData.append(`photo_files`, photo.file)
     })
+
+    await api.post('/api/comments/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+
     newComment.value = ''
+    commentPhotos.value = []
+
     const { data } = await api.get(`/api/objects/${object.value.id}/comments/`)
     comments.value = data?.results || data || []
+
   } catch (err) {
     console.error('Ошибка отправки комментария:', err)
+    alert('Не удалось отправить комментарий')
   } finally {
     submittingComment.value = false
   }
@@ -440,7 +506,7 @@ onMounted(() => {
 <style scoped>
 .object-detail {
   max-width: 900px;
-  margin: 30px auto;
+  margin: 0 auto;
   padding: 20px;
   background: white;
   border-radius: 12px;
@@ -820,6 +886,49 @@ onMounted(() => {
   gap: 12px;
 }
 
+.comment-photo-preview {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.preview-item {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #e9ecef;
+}
+
+.preview-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.remove-photo-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: rgba(220, 53, 69, 0.9);
+  color: white;
+  border: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.remove-photo-btn:hover {
+  background: #dc3545;
+}
+
 .comment-actions {
   display: flex;
   align-items: center;
@@ -848,6 +957,20 @@ onMounted(() => {
 
 .btn-icon:hover:not(:disabled) {
   background: #e2e6ea;
+}
+
+.btn-attach {
+  position: relative;
+}
+
+.btn-attach input[type="file"] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .modal-overlay {
