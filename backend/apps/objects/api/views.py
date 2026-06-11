@@ -117,10 +117,13 @@ class ObjectViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated])
     def comments(self, request, pk=None):
         obj = self.get_object()
-        comments = obj.comments.select_related('author').all()
-        serializer = CommentSerializer(comments, many=True)
+        comments = obj.comments.select_related('author').prefetch_related('photos').all()
+        serializer = CommentSerializer(
+            comments,
+            many=True,
+            context={'request': request}
+        )
         return Response(serializer.data)
-
 
 class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.select_related('author', 'object').prefetch_related('photos').all()
