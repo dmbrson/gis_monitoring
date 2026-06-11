@@ -15,8 +15,6 @@ class ObjectAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
     ordering = ['-created_at']
 
-    change_form_template = 'admin/objects/object_change_form.html'
-
     fieldsets = (
         ('Основная информация', {'fields': ('code', 'title', 'address', 'region', 'description')}),
         ('Статус и ответственные', {'fields': ('status', 'responsible')}),
